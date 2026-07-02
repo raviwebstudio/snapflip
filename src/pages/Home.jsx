@@ -6,14 +6,14 @@ import { demoImages } from '../data/demoContent.js'
 
 function Home() {
   return (
-    <main className="relative min-h-svh text-white overflow-x-hidden">
-      <div className="absolute top-0 left-0 right-0 z-50">
-        <Navbar />
-      </div>
-      <section className="grid min-h-screen w-full items-stretch lg:grid-cols-[0.95fr_1.05fr]">
-        <div className="flex flex-col justify-center max-w-2xl justify-self-center px-4 pt-24 pb-10 sm:px-6 lg:pl-12 lg:pr-8 w-full">
-          <p className="text-sm font-semibold uppercase text-sky-300">For Indian wedding photographers</p>
-          <h1 className="font-display mt-4 text-5xl font-bold leading-tight text-white sm:text-6xl">
+    <main className="min-h-svh text-white">
+      <Navbar />
+      
+      <section className="grid w-full items-stretch gap-10 xl:gap-12 grid-cols-1 xl:grid-cols-[0.95fr_1.05fr] pt-14 lg:pt-16 pb-12 max-w-[1440px] mx-auto px-4 md:px-6 lg:px-10">
+        {/* Left Column: Copy and CTA */}
+        <div className="flex flex-col justify-center max-w-2xl xl:max-w-none justify-self-center xl:justify-self-stretch w-full py-6">
+          <p className="text-sm font-semibold uppercase text-sky-300 mb-4 tracking-wider">SNAPFLIP ALBUM</p>
+          <h1 className="font-display text-5xl font-bold leading-tight text-white sm:text-6xl">
             SnapFlip
           </h1>
           <p className="mt-5 text-xl text-slate-300">
@@ -28,7 +28,7 @@ function Home() {
               View Dashboard
             </Link>
           </div>
-          <div className="mt-10 grid gap-3 sm:grid-cols-3">
+          <div className="mt-10 grid gap-3 grid-cols-1 sm:grid-cols-3">
             {[
               [Upload, 'Upload', 'Add wedding photos'],
               [Music, 'Customize', 'Pick music and details'],
@@ -42,13 +42,15 @@ function Home() {
             ))}
           </div>
         </div>
-        <div className="relative w-full h-[80vh] lg:h-screen flex items-stretch">
+
+        {/* Right Column: Interactive Flipbook Viewer */}
+        <div className="relative w-full h-[55vh] md:h-[65vh] xl:h-[calc(100vh-128px)] flex items-stretch">
           <FlipbookViewer
             images={demoImages.flatMap((image) => [image, image])}
             title="Cinematic Wedding Albums"
             photographerName="Live demo"
             musicFile="romantic-piano.mp3"
-            className="!h-full !w-full !rounded-none !border-0 flex flex-col justify-between"
+            className="!h-full !w-full flex flex-col justify-between"
           />
         </div>
       </section>

@@ -28,8 +28,8 @@ function CreateAlbum() {
   )
 
   const uploadPhoto = async (photo) => {
-    const preset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'snapflip_preset'
-    const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'lbchngyv'
+    const preset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || import.meta.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'new_one'
+    const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || import.meta.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'lbchngyv'
     const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`
 
     const formData = new FormData()
