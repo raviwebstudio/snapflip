@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowLeft, ArrowRight, Check, ImagePlus, Trash2, Upload } from 'lucide-react'
+import axios from 'axios'
 import FlipbookViewer from '../components/FlipbookViewer.jsx'
 import MusicPicker from '../components/MusicPicker.jsx'
 import Navbar from '../components/Navbar.jsx'
@@ -17,27 +18,90 @@ function CreateAlbum() {
   const [music, setMusic] = useState(musicTracks[0])
   const [publishedAlbum, setPublishedAlbum] = useState(null)
 
-  const canContinue = photos.length >= 5
+  const canContinue = useMemo(() => {
+    return photos.length >= 5 && photos.every((p) => p.status === 'success')
+  }, [photos])
+
   const publishUrl = useMemo(
     () => (publishedAlbum ? publicAlbumUrl(publishedAlbum.slug) : ''),
     [publishedAlbum],
   )
 
+  const uploadPhoto = async (photo) => {
+    const preset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'snapflip_preset'
+    const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'lbchngyv'
+    const url = `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`
+
+    const formData = new FormData()
+    formData.append('file', photo.file)
+    formData.append('upload_preset', preset)
+
+    setPhotos((current) =>
+      current.map((p) => (p.id === photo.id ? { ...p, status: 'uploading', progress: 0 } : p))
+    )
+
+    try {
+      const response = await axios.post(url, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        onUploadProgress: (progressEvent) => {
+          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+          setPhotos((current) =>
+            current.map((p) => (p.id === photo.id ? { ...p, progress: percent } : p))
+          )
+        },
+      })
+
+      const secureUrl = response.data.secure_url
+
+      setPhotos((current) =>
+        current.map((p) =>
+          p.id === photo.id ? { ...p, status: 'success', url: secureUrl, progress: 100 } : p
+        )
+      )
+    } catch (err) {
+      console.error('Cloudinary upload error:', err)
+      setPhotos((current) =>
+        current.map((p) =>
+          p.id === photo.id ? { ...p, status: 'error', error: err.message || 'Upload failed' } : p
+        )
+      )
+    }
+  }
+
   const addFiles = (files) => {
-    const accepted = Array.from(files)
+    const acceptedFiles = Array.from(files)
       .filter((file) => ['image/jpeg', 'image/png', 'image/webp'].includes(file.type))
       .slice(0, 100 - photos.length)
-      .map((file) => ({
-        id: `${file.name}-${file.lastModified}-${Math.random()}`,
-        name: file.name,
-        url: URL.createObjectURL(file),
-      }))
 
-    setPhotos((current) => [...current, ...accepted])
+    const newPhotos = acceptedFiles.map((file) => {
+      const id = `${file.name}-${file.lastModified}-${Math.random()}`
+      return {
+        id,
+        name: file.name,
+        file,
+        url: URL.createObjectURL(file),
+        progress: 0,
+        status: 'pending',
+      }
+    })
+
+    setPhotos((current) => [...current, ...newPhotos])
+
+    newPhotos.forEach((photo) => {
+      uploadPhoto(photo)
+    })
   }
 
   const removePhoto = (id) => {
-    setPhotos((current) => current.filter((photo) => photo.id !== id))
+    setPhotos((current) => {
+      const target = current.find((photo) => photo.id === id)
+      if (target && target.url && target.url.startsWith('blob:')) {
+        URL.revokeObjectURL(target.url)
+      }
+      return current.filter((photo) => photo.id !== id)
+    })
   }
 
   const movePhoto = (index, direction) => {
@@ -145,9 +209,14 @@ function CreateAlbum() {
               </label>
 
               <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10">
-                <div className="h-full rounded-full bg-sky-400" style={{ width: `${Math.min(100, photos.length)}%` }} />
+                <div
+                  className="h-full rounded-full bg-sky-400 transition-all duration-300"
+                  style={{ width: `${photos.length ? (photos.filter((p) => p.status === 'success').length / photos.length) * 100 : 0}%` }}
+                />
               </div>
-              <p className="mt-2 text-sm text-slate-400">Uploading {photos.length} of 100 photos</p>
+              <p className="mt-2 text-sm text-slate-400">
+                Uploaded {photos.filter((p) => p.status === 'success').length} of {photos.length} photos
+              </p>
 
               <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 {photos.map((photo, index) => (
@@ -164,6 +233,31 @@ function CreateAlbum() {
                         <ArrowRight size={14} />
                       </button>
                     </div>
+                    {/* Status overlay */}
+                    {photo.status === 'uploading' && (
+                      <div className="absolute inset-x-0 bottom-0 bg-black/60 px-3 py-2">
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/20">
+                          <div
+                            className="h-full rounded-full bg-sky-400 transition-all duration-300"
+                            style={{ width: `${photo.progress}%` }}
+                          />
+                        </div>
+                        <div className="mt-1 flex items-center justify-between text-[10px] text-sky-200">
+                          <span>Uploading...</span>
+                          <span>{photo.progress}%</span>
+                        </div>
+                      </div>
+                    )}
+                    {photo.status === 'success' && (
+                      <span className="absolute bottom-2 right-2 rounded-full bg-green-500 p-1 text-white shadow-lg">
+                        <Check size={14} />
+                      </span>
+                    )}
+                    {photo.status === 'error' && (
+                      <div className="absolute inset-x-0 bottom-0 bg-red-950/80 px-2 py-1 text-center text-[10px] text-red-200 truncate">
+                        Upload failed
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -186,7 +280,7 @@ function CreateAlbum() {
                   <input type="date" value={weddingDate} onChange={(event) => setWeddingDate(event.target.value)} className="form-input" />
                 </label>
               </div>
-              <MusicPicker selectedTrack={music} onSelect={setMusic} />
+              <MusicPicker selectedTrack={music} onChange={setMusic} />
             </div>
           )}
 

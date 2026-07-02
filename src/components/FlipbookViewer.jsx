@@ -9,14 +9,16 @@ function FlipbookViewer({
   images = demoImages,
   musicFile = null,
   title = 'SnapFlip Wedding Album',
-  isPublic = false,
+  isPublic: _isPublic = false,
   photographerName = 'SnapFlip Studio',
+  className = '',
 }) {
   const bookRef = useRef(null)
   const shellRef = useRef(null)
   const pageFlipRef = useRef(null)
   const audioRef = useRef(null)
   const turnAudioRef = useRef(null)
+  const hasStartedRef = useRef(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [isPlaying, setIsPlaying] = useState(false)
   const [volume, setVolume] = useState(0.65)
@@ -33,7 +35,8 @@ function FlipbookViewer({
   )
 
   const track = musicTracks.find((item) => item.file === musicFile || item.id === musicFile)
-  const audioSource = track?.file ? `/music/${track.file}` : null
+  const resolvedFile = track?.file || musicFile
+  const audioSource = resolvedFile ? `/music/${resolvedFile}` : null
 
   useEffect(() => {
     if (!bookRef.current || pageFlipRef.current) {
@@ -64,6 +67,14 @@ function FlipbookViewer({
         turnAudioRef.current.currentTime = 0
         turnAudioRef.current.play().catch(() => {})
       }
+      if (audioRef.current && audioRef.current.paused) {
+        audioRef.current.play()
+          .then(() => {
+            setIsPlaying(true)
+            hasStartedRef.current = true
+          })
+          .catch(() => {})
+      }
     })
     pageFlipRef.current = pageFlip
 
@@ -80,11 +91,16 @@ function FlipbookViewer({
   }, [volume])
 
   const startMusic = () => {
-    if (!audioRef.current || isPlaying) {
-      return
+    if (audioRef.current && !hasStartedRef.current) {
+      audioRef.current.play()
+        .then(() => {
+          setIsPlaying(true)
+          hasStartedRef.current = true
+        })
+        .catch((err) => {
+          console.error("Audio autoplay failed:", err)
+        })
     }
-
-    audioRef.current.play().then(() => setIsPlaying(true)).catch(() => {})
   }
 
   const handlePrevious = () => {
@@ -101,7 +117,12 @@ function FlipbookViewer({
     }
 
     if (audioRef.current.paused) {
-      audioRef.current.play().then(() => setIsPlaying(true)).catch(() => {})
+      audioRef.current.play()
+        .then(() => {
+          setIsPlaying(true)
+          hasStartedRef.current = true
+        })
+        .catch(() => {})
     } else {
       audioRef.current.pause()
       setIsPlaying(false)
@@ -130,11 +151,11 @@ function FlipbookViewer({
   return (
     <section
       ref={shellRef}
-      className="relative w-full overflow-hidden rounded-2xl border border-white/10 bg-[#102E33]/75 p-4 text-white shadow-2xl shadow-black/25 backdrop-blur-md sm:p-6"
+      className={`relative w-full overflow-hidden rounded-2xl border border-white/10 bg-[#102E33]/75 p-4 text-white shadow-2xl shadow-black/25 backdrop-blur-md sm:p-6 ${className}`}
       onClick={startMusic}
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_25%,rgba(56,189,248,0.18),transparent_30rem)]" />
-      <div className="relative flex flex-col items-center gap-5">
+      <div className="relative flex min-h-full w-full flex-col items-center justify-between gap-5">
         <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-medium uppercase text-[#38BDF8]">SnapFlip Album</p>
@@ -160,22 +181,13 @@ function FlipbookViewer({
                   className="h-full w-full object-cover"
                   draggable="false"
                 />
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/35 to-transparent p-5 text-left">
-                  <p className="text-xs font-medium uppercase text-sky-200">{page.location}</p>
-                  <h3 className="mt-2 text-2xl font-semibold text-white">{page.title}</h3>
-                </div>
-                {isPublic && (
-                  <span className="absolute bottom-3 right-3 rounded-full bg-black/35 px-3 py-1 text-xs text-white/70">
-                    SnapFlip.in
-                  </span>
-                )}
               </article>
             ))}
           </div>
         </div>
 
         <div className="flex w-full flex-wrap items-center justify-center gap-3">
-          <button type="button" onClick={handlePrevious} className="icon-button" aria-label="Previous page">
+          <button type="button" onClick={handlePrevious} className="primary-button" aria-label="Previous page">
             <SkipBack size={18} />
           </button>
           <button type="button" onClick={handleNext} className="primary-button">
@@ -217,11 +229,13 @@ function FlipbookViewer({
                 aria-label="Music volume"
               />
             </label>
-            <audio ref={audioRef} src={audioSource} loop />
           </div>
         )}
       </div>
       <audio ref={turnAudioRef} src="/sounds/page-turn.mp3" preload="auto" />
+      {audioSource && (
+        <audio ref={audioRef} src={audioSource} loop />
+      )}
     </section>
   )
 }

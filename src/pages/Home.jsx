@@ -6,10 +6,12 @@ import { demoImages } from '../data/demoContent.js'
 
 function Home() {
   return (
-    <main className="min-h-svh text-white">
-      <Navbar />
-      <section className="mx-auto grid min-h-[calc(100svh-5rem)] w-full max-w-7xl items-center gap-8 px-4 pb-10 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
-        <div className="max-w-2xl">
+    <main className="relative min-h-svh text-white overflow-x-hidden">
+      <div className="absolute top-0 left-0 right-0 z-50">
+        <Navbar />
+      </div>
+      <section className="grid min-h-screen w-full items-stretch lg:grid-cols-[0.95fr_1.05fr]">
+        <div className="flex flex-col justify-center max-w-2xl justify-self-center px-4 pt-24 pb-10 sm:px-6 lg:pl-12 lg:pr-8 w-full">
           <p className="text-sm font-semibold uppercase text-sky-300">For Indian wedding photographers</p>
           <h1 className="font-display mt-4 text-5xl font-bold leading-tight text-white sm:text-6xl">
             SnapFlip
@@ -40,11 +42,15 @@ function Home() {
             ))}
           </div>
         </div>
-        <FlipbookViewer
-          images={demoImages.flatMap((image) => [image, image])}
-          title="Cinematic Wedding Albums"
-          photographerName="Live demo"
-        />
+        <div className="relative w-full h-[80vh] lg:h-screen flex items-stretch">
+          <FlipbookViewer
+            images={demoImages.flatMap((image) => [image, image])}
+            title="Cinematic Wedding Albums"
+            photographerName="Live demo"
+            musicFile="romantic-piano.mp3"
+            className="!h-full !w-full !rounded-none !border-0 flex flex-col justify-between"
+          />
+        </div>
       </section>
     </main>
   )
