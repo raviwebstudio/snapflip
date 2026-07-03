@@ -68,6 +68,52 @@ export default function RecentAlbums() {
 
   const [copied, setCopied] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const deleteModalRef = useRef<HTMLDivElement>(null);
+
+  // ESC and Focus Trap for Delete Modal
+  useEffect(() => {
+    if (!deleteState.isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setDeleteState({ isOpen: false, id: "", name: "" });
+        return;
+      }
+
+      if (e.key === "Tab") {
+        const modalEl = deleteModalRef.current;
+        if (!modalEl) return;
+        const focusables = modalEl.querySelectorAll("button, [href], input, select, textarea");
+        if (focusables.length === 0) return;
+        const first = focusables[0] as HTMLElement;
+        const last = focusables[focusables.length - 1] as HTMLElement;
+
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            last.focus();
+            e.preventDefault();
+          }
+        } else {
+          if (document.activeElement === last) {
+            first.focus();
+            e.preventDefault();
+          }
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    
+    // Auto-focus first button in modal
+    setTimeout(() => {
+      const focusables = deleteModalRef.current?.querySelectorAll("button");
+      if (focusables && focusables.length > 0) {
+        (focusables[0] as HTMLElement).focus();
+      }
+    }, 50);
+
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [deleteState.isOpen]);
 
   // Refresh lists helper
   const refreshAlbums = () => {
@@ -115,11 +161,39 @@ export default function RecentAlbums() {
   };
 
   const handleDeleteConfirm = () => {
+    const targetAlbum = albums.find((a) => a.id === deleteState.id);
+    if (!targetAlbum) return;
+
     try {
-      DbService.deleteAlbum(deleteState.id);
-      addToast("Collection deleted successfully.", "success");
+      // Remove album from DB
+      DbService.deleteAlbum(targetAlbum.id);
       setDeleteState({ isOpen: false, id: "", name: "" });
       refreshAlbums();
+
+      // Show success toast with Undo option available for 5 seconds
+      addToast("Album deleted successfully.", "success", {
+        label: "Undo",
+        onClick: () => {
+          try {
+            // Restore album back to DB
+            const albumsList = DbService.getAlbums();
+            if (!albumsList.some((a) => a.id === targetAlbum.id)) {
+              albumsList.push(targetAlbum);
+              localStorage.setItem("snapflip_albums", JSON.stringify(albumsList));
+            }
+            
+            // Dispatch storage event to update grid/stats/counts/storage immediately
+            window.dispatchEvent(new Event("storage"));
+            refreshAlbums();
+            addToast("Album collection restored successfully!", "success");
+          } catch {
+            addToast("Failed to restore album.", "error");
+          }
+        }
+      });
+
+      // Dispatch storage event to update grid/stats/counts/storage immediately
+      window.dispatchEvent(new Event("storage"));
     } catch {
       addToast("Failed to delete collection.", "error");
     }
@@ -544,37 +618,79 @@ export default function RecentAlbums() {
       )}
 
       {/* Delete Confirmation Modal */}
-      {deleteState.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
-          <div className="rounded-2xl border border-rose-500/25 bg-slate-950 p-6 text-center space-y-6 max-w-sm w-full shadow-2xl shadow-rose-500/5">
-            <div className="mx-auto h-11 w-11 rounded-full bg-rose-500/10 text-rose-400 flex items-center justify-center">
-              <Trash className="h-5 w-5" />
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-sm font-bold text-slate-100 uppercase tracking-wider">Delete Collection</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Are you sure you want to delete <span className="text-slate-200 font-bold">"{deleteState.name}"</span>? All files and configurations will be permanently removed.
-              </p>
-            </div>
-            <div className="flex gap-3 justify-center">
-              <button
-                type="button"
-                onClick={() => setDeleteState({ isOpen: false, id: "", name: "" })}
-                className="px-4 py-2 text-xs font-semibold rounded-lg bg-slate-900 text-slate-300 border border-slate-800 hover:text-white cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteConfirm}
-                className="px-4 py-2 text-xs font-semibold rounded-lg bg-rose-500 hover:bg-rose-400 text-slate-950 cursor-pointer"
-              >
-                Delete
-              </button>
+      {deleteState.isOpen && (() => {
+        const targetAlbum = albums.find((a) => a.id === deleteState.id);
+        const hasCover = !!targetAlbum?.coverImage;
+        const photoCount = targetAlbum?.photos.length || 0;
+        const clientName = targetAlbum?.coupleName || "Unspecified";
+        const status = targetAlbum?.status || "Draft";
+        const coverImg = targetAlbum?.coverImage || "";
+        const gradient = targetAlbum?.gradient || "from-sky-500 to-indigo-500";
+
+        return (
+          <div 
+            onClick={() => setDeleteState({ isOpen: false, id: "", name: "" })}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4"
+          >
+            <div
+              ref={deleteModalRef}
+              onClick={(e) => e.stopPropagation()}
+              className="rounded-3xl border border-rose-500/20 bg-slate-950 p-6 text-center space-y-6 max-w-sm w-full shadow-2xl shadow-rose-500/5 relative overflow-hidden"
+            >
+              <div className="absolute inset-0 bg-gradient-to-b from-rose-500/5 via-transparent to-transparent pointer-events-none" />
+
+              {/* Cover Preview & Metadata Card */}
+              <div className="rounded-2xl border border-slate-900 bg-slate-950 overflow-hidden relative h-28 flex flex-col justify-end p-4 text-left">
+                {hasCover ? (
+                  <img src={coverImg} alt="Preview" className="absolute inset-0 h-full w-full object-cover opacity-40" />
+                ) : (
+                  <div className={`absolute inset-0 bg-gradient-to-tr ${gradient} opacity-20`} />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/45 to-transparent" />
+                
+                <div className="relative z-10 space-y-1">
+                  <div className="flex gap-2">
+                    <span className="px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[8px] font-bold uppercase tracking-wider">
+                      {status}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-slate-900 text-slate-400 border border-slate-800 text-[8px] font-bold uppercase tracking-wider">
+                      {photoCount} photos
+                    </span>
+                  </div>
+                  <h4 className="text-xs font-black text-slate-100 uppercase tracking-wide truncate">{deleteState.name}</h4>
+                  <p className="text-[9px] text-slate-500 font-mono tracking-wider truncate">Client: {clientName}</p>
+                </div>
+              </div>
+
+              {/* Danger Warning Message */}
+              <div className="space-y-2">
+                <h3 className="text-sm font-black text-slate-100 uppercase tracking-widest">Delete Collection</h3>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Are you sure you want to delete this album? <span className="text-rose-400 font-bold block mt-1">This action cannot be undone.</span>
+                </p>
+              </div>
+
+              {/* Confirmation Buttons */}
+              <div className="flex gap-3 justify-center">
+                <button
+                  type="button"
+                  onClick={() => setDeleteState({ isOpen: false, id: "", name: "" })}
+                  className="px-4 py-2 text-xs font-semibold rounded-lg bg-slate-900 text-slate-350 border border-slate-850 hover:text-white cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteConfirm()}
+                  className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg bg-rose-500 hover:bg-rose-400 text-slate-950 cursor-pointer shadow-lg shadow-rose-500/15"
+                >
+                  Delete Album
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Publish Confirmation Modal */}
       {publishState.isOpen && (

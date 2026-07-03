@@ -1,31 +1,60 @@
+import { useState, useEffect } from "react";
 import { Library, Image, Eye, HardDrive } from "lucide-react";
+import { DbService } from "../../services/dbService";
 
 export default function Stats() {
+  const [albums, setAlbums] = useState(() => DbService.getAlbums());
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setAlbums(DbService.getAlbums());
+    };
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
+  }, []);
+
+  const totalAlbums = albums.length;
+  const totalPhotos = albums.reduce((sum, album) => sum + album.photos.length, 0);
+  
+  // Calculate mock views: 120 per published album + 15 per photo; drafts get 2 views per photo
+  const totalViews = albums.reduce((sum, album) => {
+    if (album.status === "Published") {
+      return sum + 120 + (album.photos.length * 15);
+    }
+    return sum + (album.photos.length * 2);
+  }, 0);
+
+  // Storage size: average 3.2MB per photo
+  const storageMB = totalPhotos * 3.2;
+  const storageUsedStr = storageMB >= 1024 
+    ? `${(storageMB / 1024).toFixed(1)} GB`
+    : `${storageMB.toFixed(1)} MB`;
+
   const statsList = [
     {
       label: "Total Albums",
-      value: "4",
+      value: totalAlbums.toString(),
       icon: Library,
       color: "text-sky-400",
       bg: "bg-sky-500/10",
     },
     {
       label: "Total Photos",
-      value: "240",
+      value: totalPhotos.toLocaleString(),
       icon: Image,
       color: "text-emerald-400",
       bg: "bg-emerald-500/10",
     },
     {
       label: "Total Views",
-      value: "1,205",
+      value: totalViews.toLocaleString(),
       icon: Eye,
       color: "text-purple-400",
       bg: "bg-purple-500/10",
     },
     {
       label: "Storage Used",
-      value: "12.4 GB",
+      value: storageUsedStr,
       icon: HardDrive,
       color: "text-amber-400",
       bg: "bg-amber-500/10",

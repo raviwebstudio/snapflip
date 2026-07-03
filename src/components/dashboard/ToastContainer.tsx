@@ -24,8 +24,19 @@ export default function ToastContainer() {
             </div>
 
             {/* Content text */}
-            <div className="flex-1 text-left">
+            <div className="flex-1 text-left flex items-center justify-between gap-4">
               <p className="text-xs font-semibold text-slate-200 leading-normal">{toast.message}</p>
+              {toast.action && (
+                <button
+                  onClick={() => {
+                    toast.action?.onClick();
+                    removeToast(toast.id);
+                  }}
+                  className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-sky-400 hover:text-sky-350 bg-sky-500/10 hover:bg-sky-500/20 rounded-lg transition-colors cursor-pointer shrink-0"
+                >
+                  {toast.action.label}
+                </button>
+              )}
             </div>
 
             {/* Clear Button */}
