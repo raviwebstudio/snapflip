@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Camera, LayoutDashboard, Library, PlusCircle, BarChart3, CreditCard, Settings } from "lucide-react";
+import { Camera, LayoutDashboard, PlusCircle, BarChart3, CreditCard, Settings } from "lucide-react";
 
 interface SidebarProps {
   onClose?: () => void;
@@ -10,7 +10,6 @@ export default function Sidebar({ onClose }: SidebarProps) {
 
   const links = [
     { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
-    { name: "Albums", path: "/dashboard?tab=albums", icon: Library },
     { name: "Create Album", path: "/create", icon: PlusCircle },
     { name: "Analytics", path: "/dashboard?tab=analytics", icon: BarChart3 },
     { name: "Pricing", path: "/pricing", icon: CreditCard },

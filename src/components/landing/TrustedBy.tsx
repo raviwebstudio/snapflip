@@ -2,11 +2,11 @@ import { Camera, Eye, Heart, Palette, Wind } from "lucide-react";
 
 export default function TrustedBy() {
   const studios = [
-    { name: "AURA STUDIOS", icon: Camera },
-    { name: "LUMEN GALLERY", icon: Eye },
-    { name: "VERTEX PHOTO", icon: Palette },
-    { name: "ZENITH CAPTURES", icon: Wind },
-    { name: "HORIZON LABS", icon: Heart },
+    { name: "AADI PRODUCTION", icon: Camera },
+    { name: "SINDHI DIGITAL STUDIO", icon: Eye },
+    { name: "DEEPAK DIGITAL STUDIO", icon: Palette },
+    { name: "ANIL FILMS", icon: Wind },
+    { name: "SHARP STUDIO", icon: Heart },
   ];
 
   return (
