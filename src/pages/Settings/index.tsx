@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { User, Camera, Palette, Bell, HardDrive, ShieldCheck, Check } from "lucide-react";
 
 export default function Settings() {
@@ -12,7 +12,9 @@ export default function Settings() {
     studioName: "Aura Studios",
   });
 
-  const [theme, setTheme] = useState("dark");
+  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const [notifications, setNotifications] = useState({
     emailAlerts: true,
@@ -21,6 +23,31 @@ export default function Settings() {
   });
 
   const [isSaved, setIsSaved] = useState(false);
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (logoPreview) {
+        URL.revokeObjectURL(logoPreview);
+      }
+      setLogoPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleThemeChange = (newTheme: string) => {
+    setTheme(newTheme);
+    localStorage.setItem("theme", newTheme);
+
+    const isLight =
+      newTheme === "light" ||
+      (newTheme === "system" && !window.matchMedia("(prefers-color-scheme: dark)").matches);
+
+    if (isLight) {
+      document.documentElement.classList.add("light");
+    } else {
+      document.documentElement.classList.remove("light");
+    }
+  };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,16 +85,20 @@ export default function Settings() {
 
           <div className="flex flex-col sm:flex-row gap-6 items-center">
             {/* Avatar Mockup */}
-            <div className="relative group shrink-0">
-              <div className="h-20 w-20 rounded-full bg-gradient-to-br from-[#0B3037] to-sky-500 flex items-center justify-center text-xl font-bold text-white uppercase border border-slate-900">
-                JD
+            <div className="flex flex-col items-center shrink-0">
+              <div className="relative group">
+                <div className="h-20 w-20 rounded-full bg-gradient-to-br from-[#0B3037] to-sky-500 flex items-center justify-center text-xl font-bold text-white uppercase border border-slate-900">
+                  JD
+                </div>
+                <button
+                  type="button"
+                  className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white"
+                  title="Profile upload coming in Phase 4"
+                >
+                  <Camera className="h-5 w-5" />
+                </button>
               </div>
-              <button
-                type="button"
-                className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white"
-              >
-                <Camera className="h-5 w-5" />
-              </button>
+              <span className="text-[8px] font-mono text-slate-600 mt-2 block">(Profile upload coming in Phase 4)</span>
             </div>
 
             {/* Inputs */}
@@ -123,10 +154,35 @@ export default function Settings() {
 
             <div className="space-y-1.5">
               <label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block">Studio Logo</label>
-              <div className="border border-dashed border-slate-800 hover:border-sky-500/50 rounded-xl p-4 text-center cursor-pointer bg-slate-950/40 transition-colors">
-                <span className="text-xs text-slate-400">Drag logo image or click to replace</span>
-                <p className="text-[9px] text-slate-600 mt-1">PNG with transparent background preferred.</p>
+              <input
+                type="file"
+                ref={logoInputRef}
+                onChange={handleLogoChange}
+                className="hidden"
+                accept="image/*"
+              />
+              <div
+                onClick={() => logoInputRef.current?.click()}
+                className="border border-dashed border-slate-800 hover:border-sky-500/50 rounded-xl p-4 text-center cursor-pointer bg-slate-950/40 transition-all flex items-center justify-center gap-4 min-h-[64px]"
+              >
+                {logoPreview ? (
+                  <div className="flex items-center gap-3 w-full">
+                    <div className="h-10 w-10 rounded border border-slate-800 bg-slate-900 overflow-hidden shrink-0 flex items-center justify-center">
+                      <img src={logoPreview} alt="Studio Logo Preview" className="h-full w-full object-contain" />
+                    </div>
+                    <div className="text-left">
+                      <span className="text-xs text-sky-400 font-bold block">Logo loaded</span>
+                      <span className="text-[9px] text-slate-500 block">Click to replace logo</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <span className="text-xs text-slate-400 block">Click to select studio logo</span>
+                    <p className="text-[9px] text-slate-500 mt-1">PNG with transparent background preferred.</p>
+                  </div>
+                )}
               </div>
+              <p className="text-[8px] font-mono text-slate-600 mt-1">(Logo preview is local only. Cloud storage coming in Phase 4)</p>
             </div>
           </div>
         </div>
@@ -143,7 +199,7 @@ export default function Settings() {
               <button
                 type="button"
                 key={themeId}
-                onClick={() => setTheme(themeId)}
+                onClick={() => handleThemeChange(themeId)}
                 className={`py-3 px-4 rounded-xl border text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer ${
                   theme === themeId
                     ? "border-sky-500 bg-[#0B3037]/15 text-sky-400"
@@ -167,7 +223,10 @@ export default function Settings() {
             {/* Email Toggles */}
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <h4 className="text-xs font-bold text-slate-200">Email Alerts</h4>
+                <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  Email Alerts
+                  <span className="text-sky-400 font-mono italic text-[9px] font-normal">(Coming in Phase 4)</span>
+                </h4>
                 <p className="text-[10px] text-slate-500">Receive email notification updates regarding account changes.</p>
               </div>
               <button
@@ -187,7 +246,10 @@ export default function Settings() {
 
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <h4 className="text-xs font-bold text-slate-200">Client View Alerts</h4>
+                <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  Client View Alerts
+                  <span className="text-sky-400 font-mono italic text-[9px] font-normal">(Coming in Phase 4)</span>
+                </h4>
                 <p className="text-[10px] text-slate-500">Receive notifications when a client opens one of your digital flipbooks.</p>
               </div>
               <button
@@ -207,7 +269,10 @@ export default function Settings() {
 
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <h4 className="text-xs font-bold text-slate-200">Weekly Analytics Recap</h4>
+                <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  Weekly Analytics Recap
+                  <span className="text-sky-400 font-mono italic text-[9px] font-normal">(Coming in Phase 4)</span>
+                </h4>
                 <p className="text-[10px] text-slate-500">Receive weekly summaries of album view metrics directly in your email.</p>
               </div>
               <button
@@ -242,7 +307,12 @@ export default function Settings() {
             <div className="h-2 w-full rounded-full bg-slate-900 overflow-hidden">
               <div className="h-full rounded-full bg-gradient-to-r from-sky-500 to-[#0B3037]" style={{ width: "12.4%" }} />
             </div>
-            <p className="text-[10px] text-slate-500">Need more storage space? View our pricing plans to upgrade your tier.</p>
+            <p className="text-[10px] text-slate-500">
+              Need more storage space? View our pricing plans to upgrade your tier.{" "}
+              <span className="text-sky-400 font-mono italic text-[9px] block sm:inline-block sm:ml-1">
+                (Subscription upgrade coming in Phase 4)
+              </span>
+            </p>
           </div>
         </div>
 

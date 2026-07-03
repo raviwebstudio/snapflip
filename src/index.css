@@ -1,1 +1,15 @@
 @import "tailwindcss";
+
+/* Smart Light Mode inversion filters */
+html.light {
+  filter: invert(0.9) hue-rotate(180deg);
+}
+
+/* Re-invert image assets, user avatars, and media frames to maintain natural colors */
+html.light img,
+html.light [style*="background-image"],
+html.light .aspect-video,
+html.light .aspect-square img,
+html.light .rounded-full.bg-gradient-to-br {
+  filter: invert(1) hue-rotate(180deg);
+}
