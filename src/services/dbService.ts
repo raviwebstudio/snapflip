@@ -158,7 +158,23 @@ export class DbService {
       return DEFAULT_ALBUMS;
     }
     try {
-      return JSON.parse(data);
+      const parsed = JSON.parse(data) as Album[];
+      // Normalize: ensure every album has a valid settings object
+      return parsed.map((album) => ({
+        ...album,
+        settings: {
+          title: "",
+          description: "",
+          theme: "dark-luxury",
+          music: "none",
+          visibility: "Public" as const,
+          passcode: "",
+          watermark: false,
+          allowDownload: true,
+          albumSize: "auto",
+          ...((album as Record<string, unknown>).settings as Record<string, unknown> || {}),
+        },
+      }));
     } catch {
       localStorage.setItem("snapflip_albums", JSON.stringify(DEFAULT_ALBUMS));
       return DEFAULT_ALBUMS;
