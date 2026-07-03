@@ -52,20 +52,20 @@ export default function Hero() {
             <div className="relative w-full max-w-[400px] aspect-[4/3] rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 p-4 border border-slate-800/80 shadow-2xl shadow-sky-500/5">
               {/* Top border light */}
               <div className="absolute top-0 left-10 right-10 h-[1px] bg-gradient-to-r from-transparent via-sky-400/40 to-transparent" />
-              
+
               {/* CSS 3D Album Cover Mockup */}
               <div className="relative h-full w-full rounded-xl bg-[#091b1f] border border-slate-800/60 p-6 shadow-inner flex flex-col justify-between overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent pointer-events-none" />
-                
+
                 {/* Book Spine shadow */}
                 <div className="absolute left-0 top-0 bottom-0 w-3 bg-gradient-to-r from-slate-950/80 to-transparent" />
-                
+
                 <div className="space-y-4">
                   <div className="h-1.5 w-12 rounded-full bg-sky-400/80" />
                   <h3 className="text-xl font-bold text-slate-100 tracking-wide font-serif">AURA STUDIOS</h3>
                   <p className="text-xs text-slate-400 font-medium tracking-widest uppercase">Portfolio Collection</p>
                 </div>
-                
+
                 {/* Photo mockups inside the cover layout */}
                 <div className="grid grid-cols-2 gap-3 my-4">
                   <div className="aspect-square rounded-lg bg-slate-900 border border-slate-800/80 overflow-hidden relative flex items-center justify-center">
