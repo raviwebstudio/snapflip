@@ -10,7 +10,7 @@ export default function TrustedBy() {
   ];
 
   return (
-    <section className="bg-slate-950 py-10 border-y border-slate-900/60">
+    <section className="bg-slate-950 flex items-center border-y border-slate-900/60 py-10">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <p className="text-center text-xs font-semibold uppercase tracking-widest text-slate-500 mb-8">
           Trusted by elite photographers and digital agencies worldwide

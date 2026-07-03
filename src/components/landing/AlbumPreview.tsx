@@ -2,7 +2,7 @@ import { ChevronLeft, ChevronRight, Maximize2 } from "lucide-react";
 
 export default function AlbumPreview() {
   return (
-    <section className="bg-slate-950 py-24 sm:py-32 relative border-t border-slate-900/60 overflow-hidden">
+    <section className="bg-slate-950 min-h-screen flex items-center py-24 sm:py-32 relative border-t border-slate-900/60 overflow-hidden">
       {/* Background accent light */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[450px] w-[800px] rounded-full bg-[#0B3037]/15 blur-[120px] pointer-events-none" />
 

@@ -1,5 +1,6 @@
 import { createBrowserRouter } from "react-router-dom";
 import LandingLayout from "../layouts/LandingLayout";
+import DashboardLayout from "../layouts/DashboardLayout";
 import Landing from "../pages/Landing";
 import Dashboard from "../pages/Dashboard";
 import CreateAlbum from "../pages/CreateAlbum";
@@ -20,12 +21,21 @@ export const router = createBrowserRouter([
     ],
   },
   {
-    path: "/dashboard",
-    element: <Dashboard />,
-  },
-  {
-    path: "/create",
-    element: <CreateAlbum />,
+    element: <DashboardLayout />,
+    children: [
+      {
+        path: "/dashboard",
+        element: <Dashboard />,
+      },
+      {
+        path: "/create",
+        element: <CreateAlbum />,
+      },
+      {
+        path: "/settings",
+        element: <Settings />,
+      },
+    ],
   },
   {
     path: "/view/:slug",
@@ -38,10 +48,6 @@ export const router = createBrowserRouter([
   {
     path: "/search",
     element: <Search />,
-  },
-  {
-    path: "/settings",
-    element: <Settings />,
   },
   {
     path: "/playground",

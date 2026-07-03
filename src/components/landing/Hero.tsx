@@ -3,7 +3,7 @@ import { ArrowRight, BookOpen, Sparkles } from "lucide-react";
 
 export default function Hero() {
   return (
-    <section className="relative overflow-hidden bg-slate-950 pt-20 pb-28 sm:pt-24 lg:pt-32">
+    <section className="relative overflow-hidden bg-slate-950 min-h-screen flex items-center py-20">
       {/* Background glow effects */}
       <div className="absolute top-[-10%] left-[-10%] h-[500px] w-[500px] rounded-full bg-[#0B3037]/25 blur-[120px]" />
       <div className="absolute bottom-[-10%] right-[-10%] h-[500px] w-[500px] rounded-full bg-sky-500/10 blur-[120px]" />

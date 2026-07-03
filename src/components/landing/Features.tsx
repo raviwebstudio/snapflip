@@ -35,7 +35,7 @@ export default function Features() {
   ];
 
   return (
-    <section className="bg-slate-950 py-24 sm:py-32 relative">
+    <section className="bg-slate-950 min-h-screen flex items-center py-24 sm:py-32 relative">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[600px] w-[600px] rounded-full bg-[#0B3037]/10 blur-[150px] pointer-events-none" />
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative">

@@ -28,7 +28,7 @@ export default function FAQ() {
   };
 
   return (
-    <section className="bg-slate-950 py-24 sm:py-32 relative border-t border-slate-900/60">
+    <section className="bg-slate-950 py-24 relative border-t border-slate-900/60">
       <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center space-y-4 mb-16">
