@@ -37,13 +37,17 @@ export default function Hero() {
                 Get Started For Free
                 <ArrowRight className="h-5 w-5" />
               </Link>
-              <Link
-                to="/playground"
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900/40 px-6 py-3.5 text-base font-semibold text-slate-200 hover:bg-slate-900 hover:text-white transition-all"
+              <a
+                href="#pricing-section"
+                onClick={(e) => {
+                  e.preventDefault();
+                  document.getElementById("pricing-section")?.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900/40 px-6 py-3.5 text-base font-semibold text-slate-200 hover:bg-slate-900 hover:text-white transition-all cursor-pointer"
               >
                 <BookOpen className="h-5 w-5 text-sky-400" />
-                Explore Playground
-              </Link>
+                View Pricing Plans
+              </a>
             </div>
           </div>
 

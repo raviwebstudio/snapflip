@@ -7,6 +7,10 @@ interface StepDetailsProps {
     coupleName: string;
     eventType: string;
     eventDate: string;
+    albumSize: string;
+    customWidth: string;
+    customHeight: string;
+    customUnit: string;
   };
   onChange: (fields: Partial<StepDetailsProps["data"]>) => void;
   onNext: () => void;
@@ -21,6 +25,11 @@ export default function StepDetails({ data, onChange, onNext }: StepDetailsProps
     if (!data.coupleName.trim()) newErrors.coupleName = "Couple name(s) is required";
     if (!data.eventType) newErrors.eventType = "Please select an event type";
     if (!data.eventDate) newErrors.eventDate = "Event date is required";
+
+    if (data.albumSize === "custom") {
+      if (!data.customWidth.trim()) newErrors.customWidth = "Width is required";
+      if (!data.customHeight.trim()) newErrors.customHeight = "Height is required";
+    }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -134,13 +143,94 @@ export default function StepDetails({ data, onChange, onNext }: StepDetailsProps
             {errors.eventDate && <p className="text-[10px] text-rose-500">{errors.eventDate}</p>}
           </div>
         </div>
+
+        {/* Album Size Selection (P5-009) */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
+            <BookOpen className="h-3.5 w-3.5 text-sky-400" />
+            Album Size *
+          </label>
+          <select
+            value={data.albumSize || "auto"}
+            onChange={(e) => {
+              onChange({ albumSize: e.target.value });
+            }}
+            className="w-full h-11 px-4 rounded-xl border border-slate-900 bg-slate-950 text-sm text-slate-300 focus:outline-none focus:border-sky-500/50 transition-colors"
+          >
+            <option value="auto">Auto Detect (Recommended)</option>
+            <option value="a5-portrait">A5 Portrait (148 × 210 mm)</option>
+            <option value="a5-landscape">A5 Landscape (210 × 148 mm)</option>
+            <option value="a4-portrait">A4 Portrait (210 × 297 mm)</option>
+            <option value="a4-landscape">A4 Landscape (297 × 210 mm)</option>
+            <option value="square-8">Square 8 × 8 in (203 × 203 mm)</option>
+            <option value="square-10">Square 10 × 10 in (254 × 254 mm)</option>
+            <option value="12x18">12 × 18 in (305 × 457 mm)</option>
+            <option value="14x11">14 × 11 in (356 × 279 mm)</option>
+            <option value="16x24">16 × 24 in (406 × 610 mm)</option>
+            <option value="18x24">18 × 24 in (457 × 610 mm)</option>
+            <option value="custom">Custom Size</option>
+          </select>
+        </div>
+
+        {/* Custom Size Fields */}
+        {data.albumSize === "custom" && (
+          <div className="grid grid-cols-3 gap-4 p-4 rounded-xl border border-slate-900 bg-slate-950/40 text-xs">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block">Width *</label>
+              <input
+                type="number"
+                min="1"
+                required
+                value={data.customWidth}
+                onChange={(e) => {
+                  onChange({ customWidth: e.target.value });
+                  if (errors.customWidth) setErrors({ ...errors, customWidth: "" });
+                }}
+                placeholder="Width"
+                className={`w-full h-10 px-3 rounded-lg border bg-slate-950 text-slate-200 focus:outline-none ${
+                  errors.customWidth ? "border-rose-500/50" : "border-slate-900"
+                }`}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block">Height *</label>
+              <input
+                type="number"
+                min="1"
+                required
+                value={data.customHeight}
+                onChange={(e) => {
+                  onChange({ customHeight: e.target.value });
+                  if (errors.customHeight) setErrors({ ...errors, customHeight: "" });
+                }}
+                placeholder="Height"
+                className={`w-full h-10 px-3 rounded-lg border bg-slate-950 text-slate-200 focus:outline-none ${
+                  errors.customHeight ? "border-rose-500/50" : "border-slate-900"
+                }`}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block">Unit</label>
+              <select
+                value={data.customUnit}
+                onChange={(e) => onChange({ customUnit: e.target.value })}
+                className="w-full h-10 px-3 rounded-lg border border-slate-900 bg-slate-950 text-slate-300 focus:outline-none"
+              >
+                <option value="mm">mm</option>
+                <option value="cm">cm</option>
+                <option value="inch">inch</option>
+                <option value="px">px</option>
+              </select>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Action buttons */}
       <div className="pt-6 flex justify-end">
         <button
           type="submit"
-          className="inline-flex items-center justify-center rounded-xl bg-sky-500 px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-sky-400 transition-colors"
+          className="inline-flex items-center justify-center rounded-xl bg-sky-500 px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-sky-400 transition-colors cursor-pointer"
         >
           Next: Upload Photos
         </button>

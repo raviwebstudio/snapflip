@@ -1,4 +1,12 @@
-import { ClipboardCheck, AlertCircle, FileCheck, CheckCircle2 } from "lucide-react";
+import { ClipboardCheck, FileCheck, CheckCircle2 } from "lucide-react";
+
+interface UploadedFile {
+  id: string;
+  url: string;
+  name: string;
+  width?: number;
+  height?: number;
+}
 
 interface StepReviewProps {
   data: {
@@ -14,16 +22,71 @@ interface StepReviewProps {
     passcode: string;
     watermark: boolean;
     allowDownload: boolean;
+    albumSize: string;
+    customWidth?: string;
+    customHeight?: string;
+    customUnit?: string;
   };
   filesCount: number;
+  files: UploadedFile[];
   coverImage: string;
   onBack: () => void;
   onSaveDraft: () => void;
+  onPublish: () => void;
+  isPublished?: boolean;
 }
 
-export default function StepReview({ data, filesCount, coverImage, onBack, onSaveDraft }: StepReviewProps) {
+export default function StepReview({ data, filesCount, files, coverImage, onBack, onSaveDraft, onPublish, isPublished }: StepReviewProps) {
   // Estimated file size calculations
   const estSizeMb = (filesCount * 2.4).toFixed(1);
+
+  const getFriendlySizeLabel = () => {
+    const sizeMap: Record<string, string> = {
+      "auto": "Auto Detect (Recommended)",
+      "a5-portrait": "A5 Portrait (148 × 210 mm)",
+      "a5-landscape": "A5 Landscape (210 × 148 mm)",
+      "a4-portrait": "A4 Portrait (210 × 297 mm)",
+      "a4-landscape": "A4 Landscape (297 × 210 mm)",
+      "square-8": "Square 8 × 8 in (203 × 203 mm)",
+      "square-10": "Square 10 × 10 in (254 × 254 mm)",
+      "12x18": "12 × 18 in (305 × 457 mm)",
+      "14x11": "14 × 11 in (356 × 279 mm)",
+      "16x24": "16 × 24 in (406 × 610 mm)",
+      "18x24": "18 × 24 in (457 × 610 mm)",
+      "custom": `Custom (${data.customWidth} × ${data.customHeight} ${data.customUnit})`
+    };
+    
+    if (data.albumSize === "auto") {
+      let portraitCount = 0;
+      let landscapeCount = 0;
+      let squareCount = 0;
+
+      files.forEach((file) => {
+        const w = file.width || 800;
+        const h = file.height || 600;
+        const ratio = w / h;
+        if (ratio > 1.2) {
+          landscapeCount++;
+        } else if (ratio < 0.8) {
+          portraitCount++;
+        } else {
+          squareCount++;
+        }
+      });
+
+      let detected = "Landscape";
+      if (portraitCount > landscapeCount && portraitCount > squareCount) {
+        detected = "Portrait";
+      } else if (squareCount > landscapeCount && squareCount > portraitCount) {
+        detected = "Square";
+      }
+      return `Auto Detected: ${detected}`;
+    }
+
+    return sizeMap[data.albumSize] || "Auto Detect (Recommended)";
+  };
+
+  const sizeLabel = getFriendlySizeLabel();
 
   return (
     <div className="space-y-8 max-w-2xl mx-auto">
@@ -102,23 +165,10 @@ export default function StepReview({ data, filesCount, coverImage, onBack, onSav
                 <span className="font-semibold text-slate-200">{data.visibility}</span>
               </div>
               <div className="flex justify-between items-center py-1.5 border-b border-slate-900/50">
-                <span className="text-slate-500">Copyright Watermark</span>
-                <span className="font-semibold text-slate-200">{data.watermark ? "Enabled" : "Disabled"}</span>
+                <span className="text-slate-500">Album Dimensions</span>
+                <span className="font-semibold text-slate-200">{sizeLabel}</span>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Prototype Alert Note */}
-        <div className="rounded-xl border border-[#0B3037]/50 bg-[#0B3037]/10 p-4 flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-sky-400 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <span className="text-xs font-bold text-slate-200 flex items-center gap-1">
-              Prototype Mode Notice
-            </span>
-            <p className="text-[10px] text-slate-400 leading-relaxed">
-              SnapFlip is currently running in client prototype mode. The "Publish Album" action is mock-disabled. You can click "Save Draft" to return to your dashboard with simulated success tracking.
-            </p>
           </div>
         </div>
       </div>
@@ -128,7 +178,7 @@ export default function StepReview({ data, filesCount, coverImage, onBack, onSav
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center justify-center rounded-xl border border-slate-800 bg-slate-900/40 px-6 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-900 hover:text-white transition-colors"
+          className="inline-flex items-center justify-center rounded-xl border border-slate-800 bg-slate-900/40 px-6 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-900 hover:text-white transition-colors cursor-pointer"
         >
           Back
         </button>
@@ -137,7 +187,7 @@ export default function StepReview({ data, filesCount, coverImage, onBack, onSav
           <button
             type="button"
             onClick={onSaveDraft}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-6 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-850 hover:text-white transition-colors"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-6 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-850 hover:text-white transition-colors cursor-pointer"
           >
             <FileCheck className="h-4 w-4 text-sky-400" />
             Save Draft
@@ -145,11 +195,11 @@ export default function StepReview({ data, filesCount, coverImage, onBack, onSav
           
           <button
             type="button"
-            disabled
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-500 px-6 py-3 text-sm font-semibold text-slate-950 disabled:opacity-50 disabled:pointer-events-none"
+            onClick={onPublish}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-500 hover:bg-sky-400 px-6 py-3 text-sm font-semibold text-slate-950 transition-colors cursor-pointer"
           >
             <CheckCircle2 className="h-4 w-4" />
-            Publish Album
+            {isPublished ? "Update Published Album" : "Publish Album"}
           </button>
         </div>
       </div>

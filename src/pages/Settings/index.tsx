@@ -1,60 +1,123 @@
 import { useState, useRef } from "react";
-import { User, Camera, Palette, Bell, HardDrive, ShieldCheck, Check } from "lucide-react";
+import { User, Camera, Bell, HardDrive, ShieldCheck, Check } from "lucide-react";
+import { useAppStore, useToastStore } from "../../store";
 
 export default function Settings() {
-  const [profile, setProfile] = useState({
-    fullName: "John Doe",
-    email: "john@aurastudios.com",
-    phone: "+1 (555) 234-5678",
-  });
+  const { addToast } = useToastStore();
+  const {
+    brandLogo,
+    setBrandLogo,
+    userAvatar,
+    setUserAvatar,
+    profile: storeProfile,
+    setProfile: setStoreProfile
+  } = useAppStore();
 
-  const [brand, setBrand] = useState({
-    studioName: "Aura Studios",
-  });
-
-  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
-  const [notifications, setNotifications] = useState({
-    emailAlerts: true,
-    viewAlerts: true,
-    weeklyRecap: false,
+  const [profile, setProfile] = useState({
+    fullName: storeProfile.fullName,
+    email: storeProfile.email,
+    phone: storeProfile.phone,
+  });
+
+  const [brand, setBrand] = useState(() => {
+    const saved = localStorage.getItem("snapflip_settings_brand");
+    return saved ? JSON.parse(saved) : {
+      studioName: "Aura Studios",
+    };
+  });
+
+  const [notifications, setNotifications] = useState(() => {
+    const saved = localStorage.getItem("snapflip_settings_notifications");
+    return saved ? JSON.parse(saved) : {
+      emailAlerts: true,
+      viewAlerts: true,
+      weeklyRecap: false,
+    };
   });
 
   const [isSaved, setIsSaved] = useState(false);
 
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .substring(0, 2)
+      .toUpperCase() || "JD";
+  };
+
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      if (logoPreview) {
-        URL.revokeObjectURL(logoPreview);
-      }
-      setLogoPreview(URL.createObjectURL(file));
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64Data = reader.result as string;
+        setBrandLogo(base64Data);
+        addToast("Studio brand logo uploaded locally!", "success");
+      };
+      reader.readAsDataURL(file);
     }
   };
 
-  const handleThemeChange = (newTheme: string) => {
-    setTheme(newTheme);
-    localStorage.setItem("theme", newTheme);
-
-    const isLight =
-      newTheme === "light" ||
-      (newTheme === "system" && !window.matchMedia("(prefers-color-scheme: dark)").matches);
-
-    if (isLight) {
-      document.documentElement.classList.add("light");
-    } else {
-      document.documentElement.classList.remove("light");
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64Data = reader.result as string;
+        setUserAvatar(base64Data);
+        addToast("User profile avatar uploaded locally!", "success");
+      };
+      reader.readAsDataURL(file);
     }
   };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSaved(true);
-    setTimeout(() => {
-      setIsSaved(false);
-    }, 3000);
+    try {
+      setStoreProfile({
+        fullName: profile.fullName,
+        email: profile.email,
+        phone: profile.phone,
+      });
+      localStorage.setItem("snapflip_settings_brand", JSON.stringify(brand));
+      localStorage.setItem("snapflip_settings_notifications", JSON.stringify(notifications));
+      setIsSaved(true);
+      addToast("Workspace settings saved successfully!", "success");
+      setTimeout(() => {
+        setIsSaved(false);
+      }, 3000);
+    } catch {
+      addToast("Failed to save settings.", "error");
+    }
+  };
+
+  const handleReset = () => {
+    if (window.confirm("Are you sure you want to discard your unsaved edits?")) {
+      const savedBrand = localStorage.getItem("snapflip_settings_brand");
+      const savedNotifications = localStorage.getItem("snapflip_settings_notifications");
+
+      setProfile({
+        fullName: storeProfile.fullName,
+        email: storeProfile.email,
+        phone: storeProfile.phone,
+      });
+
+      setBrand(savedBrand ? JSON.parse(savedBrand) : {
+        studioName: "Aura Studios",
+      });
+
+      setNotifications(savedNotifications ? JSON.parse(savedNotifications) : {
+        emailAlerts: true,
+        viewAlerts: true,
+        weeklyRecap: false,
+      });
+
+      addToast("Settings reset to last saved state.", "info");
+    }
   };
 
   return (
@@ -85,28 +148,45 @@ export default function Settings() {
 
           <div className="flex flex-col sm:flex-row gap-6 items-center">
             {/* Avatar Mockup */}
-            <div className="flex flex-col items-center shrink-0">
+            <div className="flex flex-col items-center shrink-0 font-mono">
               <div className="relative group">
-                <div className="h-20 w-20 rounded-full bg-gradient-to-br from-[#0B3037] to-sky-500 flex items-center justify-center text-xl font-bold text-white uppercase border border-slate-900">
-                  JD
-                </div>
+                <input
+                  type="file"
+                  ref={avatarInputRef}
+                  onChange={handleAvatarChange}
+                  accept="image/*"
+                  className="hidden"
+                />
+                {userAvatar ? (
+                  <img
+                    src={userAvatar}
+                    alt="User Avatar"
+                    className="h-20 w-20 rounded-full object-cover border border-slate-900"
+                  />
+                ) : (
+                  <div className="h-20 w-20 rounded-full bg-gradient-to-br from-[#0B3037] to-sky-500 flex items-center justify-center text-xl font-bold text-white uppercase border border-slate-900">
+                    {getInitials(profile.fullName)}
+                  </div>
+                )}
                 <button
                   type="button"
+                  onClick={() => avatarInputRef.current?.click()}
                   className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white"
-                  title="Profile upload coming in Phase 4"
+                  title="Upload profile avatar"
                 >
                   <Camera className="h-5 w-5" />
                 </button>
               </div>
-              <span className="text-[8px] font-mono text-slate-600 mt-2 block">(Profile upload coming in Phase 4)</span>
+              <span className="text-[8px] font-mono text-slate-500 mt-2 block">(Click camera to change avatar)</span>
             </div>
 
             {/* Inputs */}
-            <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex-1 w-full grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block">Full Name</label>
                 <input
                   type="text"
+                  required
                   value={profile.fullName}
                   onChange={(e) => setProfile({ ...profile, fullName: e.target.value })}
                   className="w-full h-11 px-4 rounded-xl border border-slate-900 bg-slate-950 text-sm text-slate-200 focus:outline-none focus:border-sky-500/50 transition-colors"
@@ -116,6 +196,7 @@ export default function Settings() {
                 <label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block">Email Address</label>
                 <input
                   type="email"
+                  required
                   value={profile.email}
                   onChange={(e) => setProfile({ ...profile, email: e.target.value })}
                   className="w-full h-11 px-4 rounded-xl border border-slate-900 bg-slate-950 text-sm text-slate-200 focus:outline-none focus:border-sky-500/50 transition-colors"
@@ -125,6 +206,7 @@ export default function Settings() {
                 <label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block">Phone Number</label>
                 <input
                   type="text"
+                  required
                   value={profile.phone}
                   onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
                   className="w-full h-11 px-4 rounded-xl border border-slate-900 bg-slate-950 text-sm text-slate-200 focus:outline-none focus:border-sky-500/50 transition-colors"
@@ -141,11 +223,12 @@ export default function Settings() {
             <h3 className="text-sm font-bold uppercase tracking-wider">Brand Settings</h3>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-xs">
             <div className="space-y-1.5">
               <label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block">Studio / Business Name</label>
               <input
                 type="text"
+                required
                 value={brand.studioName}
                 onChange={(e) => setBrand({ ...brand, studioName: e.target.value })}
                 className="w-full h-11 px-4 rounded-xl border border-slate-900 bg-slate-950 text-sm text-slate-200 focus:outline-none focus:border-sky-500/50 transition-colors"
@@ -165,10 +248,10 @@ export default function Settings() {
                 onClick={() => logoInputRef.current?.click()}
                 className="border border-dashed border-slate-800 hover:border-sky-500/50 rounded-xl p-4 text-center cursor-pointer bg-slate-950/40 transition-all flex items-center justify-center gap-4 min-h-[64px]"
               >
-                {logoPreview ? (
+                {brandLogo ? (
                   <div className="flex items-center gap-3 w-full">
                     <div className="h-10 w-10 rounded border border-slate-800 bg-slate-900 overflow-hidden shrink-0 flex items-center justify-center">
-                      <img src={logoPreview} alt="Studio Logo Preview" className="h-full w-full object-contain" />
+                      <img src={brandLogo} alt="Studio Logo Preview" className="h-full w-full object-contain" />
                     </div>
                     <div className="text-left">
                       <span className="text-xs text-sky-400 font-bold block">Logo loaded</span>
@@ -187,30 +270,7 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* Theme Preferences */}
-        <div className="rounded-2xl border border-slate-900 bg-slate-950 p-6 space-y-6 shadow-lg">
-          <div className="flex items-center gap-2 text-slate-200 border-b border-slate-900/60 pb-3">
-            <Palette className="h-4.5 w-4.5 text-sky-400" />
-            <h3 className="text-sm font-bold uppercase tracking-wider">Theme Preferences</h3>
-          </div>
 
-          <div className="grid grid-cols-3 gap-4">
-            {["light", "dark", "system"].map((themeId) => (
-              <button
-                type="button"
-                key={themeId}
-                onClick={() => handleThemeChange(themeId)}
-                className={`py-3 px-4 rounded-xl border text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer ${
-                  theme === themeId
-                    ? "border-sky-500 bg-[#0B3037]/15 text-sky-400"
-                    : "border-slate-900 bg-slate-950 text-slate-500 hover:text-slate-300"
-                }`}
-              >
-                {themeId}
-              </button>
-            ))}
-          </div>
-        </div>
 
         {/* Notification Preferences */}
         <div className="rounded-2xl border border-slate-900 bg-slate-950 p-6 space-y-6 shadow-lg">
@@ -222,7 +282,7 @@ export default function Settings() {
           <div className="space-y-4">
             {/* Email Toggles */}
             <div className="flex items-center justify-between">
-              <div className="space-y-1">
+              <div className="space-y-1 text-xs">
                 <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                   Email Alerts
                   <span className="text-sky-400 font-mono italic text-[9px] font-normal">(Coming in Phase 4)</span>
@@ -245,12 +305,12 @@ export default function Settings() {
             </div>
 
             <div className="flex items-center justify-between">
-              <div className="space-y-1">
+              <div className="space-y-1 text-xs">
                 <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                  Client View Alerts
+                  Client View Notifications
                   <span className="text-sky-400 font-mono italic text-[9px] font-normal">(Coming in Phase 4)</span>
                 </h4>
-                <p className="text-[10px] text-slate-500">Receive notifications when a client opens one of your digital flipbooks.</p>
+                <p className="text-[10px] text-slate-500">Alert me when a client opens an album view link.</p>
               </div>
               <button
                 type="button"
@@ -268,12 +328,12 @@ export default function Settings() {
             </div>
 
             <div className="flex items-center justify-between">
-              <div className="space-y-1">
+              <div className="space-y-1 text-xs">
                 <h4 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                  Weekly Analytics Recap
+                  Weekly Recap Digest
                   <span className="text-sky-400 font-mono italic text-[9px] font-normal">(Coming in Phase 4)</span>
                 </h4>
-                <p className="text-[10px] text-slate-500">Receive weekly summaries of album view metrics directly in your email.</p>
+                <p className="text-[10px] text-slate-500">Receive a weekly summary email detailing traffic, downloads, and favorites metrics.</p>
               </div>
               <button
                 type="button"
@@ -299,17 +359,20 @@ export default function Settings() {
             <h3 className="text-sm font-bold uppercase tracking-wider">Storage Information</h3>
           </div>
 
-          <div className="space-y-3">
-            <div className="flex justify-between items-baseline text-xs font-mono">
-              <span className="text-slate-300">12.4 GB used</span>
-              <span className="text-slate-500">of 100 GB</span>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-slate-400">Staged Space Occupied</span>
+              <span className="font-semibold text-slate-200 font-mono">1.2 GB / 50 GB Used</span>
             </div>
-            <div className="h-2 w-full rounded-full bg-slate-900 overflow-hidden">
-              <div className="h-full rounded-full bg-gradient-to-r from-sky-500 to-[#0B3037]" style={{ width: "12.4%" }} />
+
+            {/* Simulated Progress bar */}
+            <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden">
+              <div className="h-full bg-sky-500 rounded-full" style={{ width: "2.4%" }} />
             </div>
-            <p className="text-[10px] text-slate-500">
-              Need more storage space? View our pricing plans to upgrade your tier.{" "}
-              <span className="text-sky-400 font-mono italic text-[9px] block sm:inline-block sm:ml-1">
+
+            <p className="text-[10px] text-slate-500 leading-normal">
+              High resolution photo uploads consume space quickly. Upgrade your plan to expand storage capacity.{" "}
+              <span className="text-sky-400 font-mono italic text-[9px] block sm:inline">
                 (Subscription upgrade coming in Phase 4)
               </span>
             </p>
@@ -340,7 +403,14 @@ export default function Settings() {
         </div>
 
         {/* Form Submission buttons */}
-        <div className="flex justify-end pt-4">
+        <div className="flex justify-end gap-3 pt-4">
+          <button
+            type="button"
+            onClick={handleReset}
+            className="inline-flex items-center justify-center rounded-xl border border-slate-800 bg-slate-900/40 px-6 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-900 transition-colors cursor-pointer"
+          >
+            Reset Settings
+          </button>
           <button
             type="submit"
             className="inline-flex items-center justify-center rounded-xl bg-sky-500 px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-sky-400 transition-colors cursor-pointer"

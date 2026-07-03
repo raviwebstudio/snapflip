@@ -57,7 +57,7 @@ export default function PricingPreview() {
   ];
 
   return (
-    <section className="bg-slate-950 min-h-screen flex items-center py-24 sm:py-32 relative border-t border-slate-900/60">
+    <section id="pricing-section" className="bg-slate-950 min-h-screen flex items-center py-24 sm:py-32 relative border-t border-slate-900/60">
       <div className="absolute top-0 right-10 h-[300px] w-[300px] rounded-full bg-sky-500/5 blur-[100px] pointer-events-none" />
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">

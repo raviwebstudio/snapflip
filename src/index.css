@@ -13,3 +13,17 @@ html.light .aspect-square img,
 html.light .rounded-full.bg-gradient-to-br {
   filter: invert(1) hue-rotate(180deg);
 }
+
+/* Browser Autofill Overrides (BUG-007) */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0px 1000px #020617 inset !important;
+  -webkit-text-fill-color: #cbd5e1 !important; /* text-slate-300 */
+  caret-color: #cbd5e1 !important;
+  transition: background-color 5000s ease-in-out 0s;
+  border-radius: inherit !important;
+}

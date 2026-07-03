@@ -8,8 +8,9 @@ import Viewer from "../pages/Viewer";
 import Pricing from "../pages/Pricing";
 import Search from "../pages/Search";
 import Settings from "../pages/Settings";
-import Playground from "../pages/Playground";
 import Analytics from "../pages/Analytics";
+import About from "../pages/About";
+import Contact from "../pages/Contact";
 
 export const router = createBrowserRouter([
   {
@@ -18,6 +19,14 @@ export const router = createBrowserRouter([
       {
         path: "/",
         element: <Landing />,
+      },
+      {
+        path: "/about",
+        element: <About />,
+      },
+      {
+        path: "/contact",
+        element: <Contact />,
       },
     ],
   },
@@ -53,9 +62,5 @@ export const router = createBrowserRouter([
   {
     path: "/search",
     element: <Search />,
-  },
-  {
-    path: "/playground",
-    element: <Playground />,
   },
 ]);

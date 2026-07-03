@@ -1,9 +1,21 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Menu, X, Camera } from "lucide-react";
 
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const location = useLocation();
+
+  const handleScroll = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
+    if (location.pathname === "/") {
+      e.preventDefault();
+      const element = document.getElementById(id);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth" });
+      }
+      setIsOpen(false);
+    }
+  };
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-slate-900/55 bg-slate-950/85 backdrop-blur-md">
@@ -21,14 +33,31 @@ export default function Navbar() {
 
           {/* Desktop Nav */}
           <div className="hidden md:flex items-center gap-8">
-            <Link to="/dashboard" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">
-              Dashboard
+            <Link to="/" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">
+              Home
             </Link>
-            <Link to="/pricing" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">
+            <Link
+              to="/#pricing-section"
+              onClick={(e) => handleScroll(e, "pricing-section")}
+              className="text-sm font-medium text-slate-300 hover:text-white transition-colors"
+            >
               Pricing
             </Link>
-            <Link to="/playground" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">
-              Playground
+            <Link
+              to="/#faq-section"
+              onClick={(e) => handleScroll(e, "faq-section")}
+              className="text-sm font-medium text-slate-300 hover:text-white transition-colors"
+            >
+              FAQ
+            </Link>
+            <Link to="/about" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">
+              About
+            </Link>
+            <Link to="/contact" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">
+              Contact
+            </Link>
+            <Link to="/dashboard" className="text-sm font-medium text-slate-300 hover:text-white transition-colors">
+              Dashboard
             </Link>
           </div>
 
@@ -58,25 +87,46 @@ export default function Navbar() {
       {isOpen && (
         <div className="md:hidden border-b border-slate-900 bg-slate-950/95 px-4 pt-2 pb-4 space-y-1">
           <Link
-            to="/dashboard"
+            to="/"
             onClick={() => setIsOpen(false)}
             className="block rounded-md px-3 py-2 text-base font-medium text-slate-300 hover:bg-slate-900 hover:text-white"
           >
-            Dashboard
+            Home
           </Link>
           <Link
-            to="/pricing"
-            onClick={() => setIsOpen(false)}
+            to="/#pricing-section"
+            onClick={(e) => handleScroll(e, "pricing-section")}
             className="block rounded-md px-3 py-2 text-base font-medium text-slate-300 hover:bg-slate-900 hover:text-white"
           >
             Pricing
           </Link>
           <Link
-            to="/playground"
+            to="/#faq-section"
+            onClick={(e) => handleScroll(e, "faq-section")}
+            className="block rounded-md px-3 py-2 text-base font-medium text-slate-300 hover:bg-slate-900 hover:text-white"
+          >
+            FAQ
+          </Link>
+          <Link
+            to="/about"
             onClick={() => setIsOpen(false)}
             className="block rounded-md px-3 py-2 text-base font-medium text-slate-300 hover:bg-slate-900 hover:text-white"
           >
-            Playground
+            About
+          </Link>
+          <Link
+            to="/contact"
+            onClick={() => setIsOpen(false)}
+            className="block rounded-md px-3 py-2 text-base font-medium text-slate-300 hover:bg-slate-900 hover:text-white"
+          >
+            Contact
+          </Link>
+          <Link
+            to="/dashboard"
+            onClick={() => setIsOpen(false)}
+            className="block rounded-md px-3 py-2 text-base font-medium text-slate-300 hover:bg-slate-900 hover:text-white"
+          >
+            Dashboard
           </Link>
           <div className="pt-4">
             <Link
