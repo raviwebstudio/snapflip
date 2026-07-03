@@ -4,12 +4,12 @@ import { ArrowRight, Sparkles } from "lucide-react";
 export default function CTA() {
   return (
     <section className="bg-slate-950 min-h-[70vh] flex items-center py-24 relative border-t border-slate-900/60">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0b3037] via-[#041215] to-slate-950 px-8 py-16 sm:px-16 sm:py-24 border border-[#0b3037]/50 shadow-2xl text-center">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 w-full">
+        <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0b3037] via-[#041215] to-slate-950 px-4 py-16 sm:px-16 sm:py-24 border border-[#0b3037]/50 shadow-2xl text-center">
           {/* Subtle light orb */}
           <div className="absolute top-0 right-0 h-50 w-50 rounded-full bg-sky-500/10 blur-[80px]" />
 
-          <div className="relative mx-auto w-4xl space-y-6">
+          <div className="relative mx-auto max-w-4xl w-full space-y-6">
             <div className="inline-flex items-center gap-2 rounded-full border border-sky-400/20 bg-sky-500/5 px-4 py-1 text-xs text-sky-400">
               <Sparkles className="h-3.5 w-3.5" />
               <span>Elevate Your Portfolio Showcase</span>
