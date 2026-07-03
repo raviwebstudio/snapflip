@@ -11,7 +11,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
   const links = [
     { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
     { name: "Create Album", path: "/create", icon: PlusCircle },
-    { name: "Analytics", path: "/dashboard?tab=analytics", icon: BarChart3 },
+    { name: "Analytics", path: "/analytics", icon: BarChart3 },
     { name: "Pricing", path: "/pricing", icon: CreditCard },
     { name: "Settings", path: "/settings", icon: Settings },
   ];
@@ -33,7 +33,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
         <nav className="space-y-1">
           {links.map((link) => {
             const Icon = link.icon;
-            const isActive = location.pathname === link.path || (link.path.includes("tab=") && location.search === link.path.substring(link.path.indexOf("?")));
+            const isActive = location.pathname === link.path;
             
             return (
               <Link
@@ -55,15 +55,21 @@ export default function Sidebar({ onClose }: SidebarProps) {
       </div>
 
       {/* Profile info footer in sidebar */}
-      <div className="border-t border-slate-900 pt-6 flex items-center gap-3">
-        <div className="h-9 w-9 rounded-full bg-gradient-to-br from-[#0B3037] to-sky-500 flex items-center justify-center text-xs font-bold text-white uppercase">
+      <Link
+        to="/settings"
+        onClick={onClose}
+        className={`border-t border-slate-900 pt-6 flex items-center gap-3 group transition-all duration-200 cursor-pointer ${
+          location.pathname === "/settings" ? "opacity-100" : "opacity-85 hover:opacity-100"
+        }`}
+      >
+        <div className="h-9 w-9 rounded-full bg-gradient-to-br from-[#0B3037] to-sky-500 flex items-center justify-center text-xs font-bold text-white uppercase group-hover:scale-[1.05] transition-transform duration-200 shrink-0">
           JD
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-slate-200 truncate">John Doe</p>
+          <p className="text-xs font-semibold text-slate-200 truncate group-hover:text-sky-400 transition-colors">John Doe</p>
           <p className="text-[10px] text-slate-500 truncate">john@aurastudios.com</p>
         </div>
-      </div>
+      </Link>
     </aside>
   );
 }

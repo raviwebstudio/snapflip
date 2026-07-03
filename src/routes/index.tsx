@@ -9,6 +9,7 @@ import Pricing from "../pages/Pricing";
 import Search from "../pages/Search";
 import Settings from "../pages/Settings";
 import Playground from "../pages/Playground";
+import Analytics from "../pages/Analytics";
 
 export const router = createBrowserRouter([
   {
@@ -28,6 +29,10 @@ export const router = createBrowserRouter([
         element: <Dashboard />,
       },
       {
+        path: "/analytics",
+        element: <Analytics />,
+      },
+      {
         path: "/create",
         element: <CreateAlbum />,
       },
@@ -35,15 +40,15 @@ export const router = createBrowserRouter([
         path: "/settings",
         element: <Settings />,
       },
+      {
+        path: "/pricing",
+        element: <Pricing />,
+      },
     ],
   },
   {
     path: "/view/:slug",
     element: <Viewer />,
-  },
-  {
-    path: "/pricing",
-    element: <Pricing />,
   },
   {
     path: "/search",

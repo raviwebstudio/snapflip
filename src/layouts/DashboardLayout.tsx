@@ -12,6 +12,10 @@ export default function DashboardLayout() {
     pageTitle = "Create Album";
   } else if (location.pathname.startsWith("/settings")) {
     pageTitle = "Settings";
+  } else if (location.pathname.startsWith("/analytics")) {
+    pageTitle = "Analytics";
+  } else if (location.pathname.startsWith("/pricing")) {
+    pageTitle = "Pricing Plans";
   }
 
   return (
