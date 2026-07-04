@@ -64,27 +64,28 @@ export default function CreateAlbum() {
       if (existing) {
         setEditingAlbumId(queryId);
         setAlbumStatus(existing.status);
+        const s = existing.settings;
         setDetails({
           albumName: existing.name || "",
           coupleName: existing.coupleName || "",
           eventType: existing.eventType || "",
           eventDate: existing.eventDate || "",
-          albumSize: existing.settings.albumSize || "auto",
-          customWidth: existing.settings.customWidth || "",
-          customHeight: existing.settings.customHeight || "",
-          customUnit: existing.settings.customUnit || "mm",
+          albumSize: s?.albumSize ?? "auto",
+          customWidth: s?.customWidth ?? "",
+          customHeight: s?.customHeight ?? "",
+          customUnit: s?.customUnit ?? "mm",
         });
         setFiles(existing.photos || []);
         setCoverImage(existing.coverImage || "");
         setSettings({
-          title: existing.settings.title || "",
-          description: existing.settings.description || "",
-          theme: existing.settings.theme || "dark",
-          music: existing.settings.music || "none",
-          visibility: existing.settings.visibility || "Public",
-          passcode: existing.settings.passcode || "",
-          watermark: existing.settings.watermark || false,
-          allowDownload: existing.settings.allowDownload || false,
+          title: s?.title ?? "",
+          description: s?.description ?? "",
+          theme: s?.theme ?? "dark-luxury",
+          music: s?.music ?? "none",
+          visibility: s?.visibility ?? "Public",
+          passcode: s?.passcode ?? "",
+          watermark: s?.watermark ?? false,
+          allowDownload: s?.allowDownload ?? true,
         });
 
         // Restore step if there is matching session editing cache

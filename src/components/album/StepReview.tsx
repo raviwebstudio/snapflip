@@ -1,4 +1,5 @@
 import { ClipboardCheck, FileCheck, CheckCircle2 } from "lucide-react";
+import { ALBUM_SIZE_MAP } from "../../utils/albumUtils";
 
 interface UploadedFile {
   id: string;
@@ -41,22 +42,7 @@ export default function StepReview({ data, filesCount, files, coverImage, onBack
   const estSizeMb = (filesCount * 2.4).toFixed(1);
 
   const getFriendlySizeLabel = () => {
-    const sizeMap: Record<string, string> = {
-      "auto": "Auto Detect (Recommended)",
-      "a5-portrait": "A5 Portrait (148 × 210 mm)",
-      "a5-landscape": "A5 Landscape (210 × 148 mm)",
-      "a4-portrait": "A4 Portrait (210 × 297 mm)",
-      "a4-landscape": "A4 Landscape (297 × 210 mm)",
-      "square-8": "Square 8 × 8 in (203 × 203 mm)",
-      "square-10": "Square 10 × 10 in (254 × 254 mm)",
-      "12x18": "12 × 18 in (305 × 457 mm)",
-      "14x11": "14 × 11 in (356 × 279 mm)",
-      "16x24": "16 × 24 in (406 × 610 mm)",
-      "18x24": "18 × 24 in (457 × 610 mm)",
-      "custom": `Custom (${data.customWidth} × ${data.customHeight} ${data.customUnit})`
-    };
-    
-    if (data.albumSize === "auto") {
+    if (!data.albumSize || data.albumSize === "auto") {
       let portraitCount = 0;
       let landscapeCount = 0;
       let squareCount = 0;
@@ -83,7 +69,10 @@ export default function StepReview({ data, filesCount, files, coverImage, onBack
       return `Auto Detected: ${detected}`;
     }
 
-    return sizeMap[data.albumSize] || "Auto Detect (Recommended)";
+    if (data.albumSize === "custom") {
+      return `Custom (${data.customWidth ?? "?"} × ${data.customHeight ?? "?"} ${data.customUnit ?? "mm"})`;
+    }
+    return ALBUM_SIZE_MAP[data.albumSize]?.label ?? "AUTO (Recommended)";
   };
 
   const sizeLabel = getFriendlySizeLabel();

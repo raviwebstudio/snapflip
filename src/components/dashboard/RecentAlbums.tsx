@@ -23,6 +23,7 @@ import QRCode from "qrcode";
 import { DbService } from "../../services/dbService";
 import type { Album } from "../../services/dbService";
 import { useToastStore } from "../../store";
+import { getSizeBadgeLabel, getSizeOrientation } from "../../utils/albumUtils";
 
 export default function RecentAlbums() {
   const navigate = useNavigate();
@@ -232,8 +233,8 @@ export default function RecentAlbums() {
     const shareUrl = `${window.location.origin}/view/${album.id}`;
     
     // Check if album settings already has QR code stored
-    let qrPng = album.settings.qrCodeDataUrl || "";
-    let qrSvg = album.settings.qrCodeSvg || "";
+    let qrPng = album.settings?.qrCodeDataUrl || "";
+    let qrSvg = album.settings?.qrCodeSvg || "";
 
     if (!qrPng || !qrSvg) {
       try {
@@ -470,6 +471,7 @@ export default function RecentAlbums() {
 
   const handleContinueEditing = (album: Album) => {
     // Stage draft data back to the wizard localStorage cache
+    const s = album.settings;
     const wizardState = {
       step: 1, // Start them at step 1 so they can click through and verify
       details: {
@@ -477,66 +479,43 @@ export default function RecentAlbums() {
         coupleName: album.coupleName,
         eventType: album.eventType,
         eventDate: album.eventDate,
-        albumSize: album.settings.albumSize || "auto",
-        customWidth: album.settings.customWidth || "",
-        customHeight: album.settings.customHeight || "",
-        customUnit: album.settings.customUnit || "mm",
+        albumSize: s?.albumSize ?? "auto",
+        customWidth: s?.customWidth ?? "",
+        customHeight: s?.customHeight ?? "",
+        customUnit: s?.customUnit ?? "mm",
       },
       files: album.photos,
       coverImage: album.coverImage,
       settings: {
-        title: album.settings.title,
-        description: album.settings.description,
-        theme: album.settings.theme,
-        music: album.settings.music,
-        visibility: album.settings.visibility,
-        passcode: album.settings.passcode,
-        watermark: album.settings.watermark,
-        allowDownload: album.settings.allowDownload,
+        title: s?.title ?? "",
+        description: s?.description ?? "",
+        theme: s?.theme ?? "dark-luxury",
+        music: s?.music ?? "none",
+        visibility: s?.visibility ?? "Public",
+        passcode: s?.passcode ?? "",
+        watermark: s?.watermark ?? false,
+        allowDownload: s?.allowDownload ?? true,
       }
     };
     localStorage.setItem("snapflip_create_album_state", JSON.stringify(wizardState));
     navigate(`/create?id=${album.id}`);
   };
 
-  // Helper to extract size badge labels
+  // Helper to extract size badge labels (delegates to centralised utility)
   const getBadgeLabel = (album: Album) => {
-    const size = album.settings.albumSize;
+    const size = album.settings?.albumSize;
     if (!size || size === "auto") {
-      return album.settings.detectedSize || "Auto";
+      return album.settings?.detectedSize || "Auto";
     }
-    const labelMap: Record<string, string> = {
-      "a5-portrait": "A5 Portrait",
-      "a5-landscape": "A5 Landscape",
-      "a4-portrait": "A4 Portrait",
-      "a4-landscape": "A4 Landscape",
-      "square-8": "Square 8x8",
-      "square-10": "Square 10x10",
-      "12x18": "12×18",
-      "14x11": "14×11",
-      "16x24": "16×24",
-      "18x24": "18×24",
-      "custom": "Custom Size"
-    };
-    return labelMap[size] || "Auto";
+    return getSizeBadgeLabel(size);
   };
 
   const getOrientationLabel = (album: Album) => {
-    const size = album.settings.albumSize;
-    if (!size || size === "auto") {
-      return album.settings.detectedSize || "Landscape";
-    }
-    if (size === "custom" && album.settings.customWidth && album.settings.customHeight) {
-      const w = Number(album.settings.customWidth);
-      const h = Number(album.settings.customHeight);
-      if (w > h) return "Landscape";
-      if (h > w) return "Portrait";
-      return "Square";
-    }
-    if (size.includes("portrait")) return "Portrait";
-    if (size.includes("landscape")) return "Landscape";
-    if (size.includes("square")) return "Square";
-    return "Landscape";
+    return getSizeOrientation(
+      album.settings?.albumSize,
+      album.settings?.customWidth,
+      album.settings?.customHeight
+    );
   };
 
   // Filtering

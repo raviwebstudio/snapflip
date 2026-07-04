@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Sparkles, Calendar, BookOpen, User, Heart } from "lucide-react";
+import { ALBUM_SIZE_OPTIONS } from "../../utils/albumUtils";
 
 interface StepDetailsProps {
   data: {
@@ -157,18 +158,9 @@ export default function StepDetails({ data, onChange, onNext }: StepDetailsProps
             }}
             className="w-full h-11 px-4 rounded-xl border border-slate-900 bg-slate-950 text-sm text-slate-300 focus:outline-none focus:border-sky-500/50 transition-colors"
           >
-            <option value="auto">Auto Detect (Recommended)</option>
-            <option value="a5-portrait">A5 Portrait (148 × 210 mm)</option>
-            <option value="a5-landscape">A5 Landscape (210 × 148 mm)</option>
-            <option value="a4-portrait">A4 Portrait (210 × 297 mm)</option>
-            <option value="a4-landscape">A4 Landscape (297 × 210 mm)</option>
-            <option value="square-8">Square 8 × 8 in (203 × 203 mm)</option>
-            <option value="square-10">Square 10 × 10 in (254 × 254 mm)</option>
-            <option value="12x18">12 × 18 in (305 × 457 mm)</option>
-            <option value="14x11">14 × 11 in (356 × 279 mm)</option>
-            <option value="16x24">16 × 24 in (406 × 610 mm)</option>
-            <option value="18x24">18 × 24 in (457 × 610 mm)</option>
-            <option value="custom">Custom Size</option>
+            {ALBUM_SIZE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
           </select>
         </div>
 

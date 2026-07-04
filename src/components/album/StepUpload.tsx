@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { UploadCloud, Image as ImageIcon, X, Loader2, AlertTriangle } from "lucide-react";
 import { UploadService } from "../../services/uploadService";
+import { getExifOrientation, generateImageVariants } from "../../utils/imageUtils";
 
 interface UploadedFile {
   id: string;
@@ -8,6 +9,9 @@ interface UploadedFile {
   name: string;
   width?: number;
   height?: number;
+  optimizedUrl?: string;
+  thumbnailUrl?: string;
+  orientation?: number;
 }
 
 interface StepUploadProps {
@@ -90,7 +94,8 @@ export default function StepUpload({ files, onFilesChange, onNext, onBack }: Ste
     const measuredFiles = await Promise.all(
       validFiles.map(async (file) => {
         const dims = await getImageDimensions(file);
-        return { file, ...dims };
+        const orientation = await getExifOrientation(file);
+        return { file, orientation, ...dims };
       })
     );
 
@@ -113,12 +118,18 @@ export default function StepUpload({ files, onFilesChange, onNext, onBack }: Ste
             setProgress(avg);
           });
 
+          // Generate Cloudinary optimized/thumbnail links
+          const { optimizedUrl, thumbnailUrl } = await generateImageVariants(fileObj.file, result.secure_url);
+
           uploadedResults.push({
             id: result.public_id,
             url: result.secure_url,
             name: fileObj.file.name,
             width: fileObj.width,
             height: fileObj.height,
+            orientation: fileObj.orientation,
+            optimizedUrl,
+            thumbnailUrl,
           });
         });
 
@@ -131,25 +142,30 @@ export default function StepUpload({ files, onFilesChange, onNext, onBack }: Ste
         setUploading(false);
       }
     } else {
-      setUploadStatus("Running local preview simulation...");
-      let currentProgress = 0;
-      const interval = setInterval(() => {
-        currentProgress += 20;
-        setProgress(Math.min(currentProgress, 100));
+      setUploadStatus("Generating optimized preview sizes...");
+      const localList: UploadedFile[] = [];
+      const total = measuredFiles.length;
 
-        if (currentProgress >= 100) {
-          clearInterval(interval);
-          setUploading(false);
-          const localList = measuredFiles.map((f) => ({
-            id: Math.random().toString(36).substring(2, 9),
-            url: URL.createObjectURL(f.file),
-            name: f.file.name,
-            width: f.width,
-            height: f.height,
-          }));
-          onFilesChange([...files, ...localList]);
-        }
-      }, 300);
+      for (let idx = 0; idx < total; idx++) {
+        const f = measuredFiles[idx];
+        const { optimizedUrl, thumbnailUrl } = await generateImageVariants(f.file);
+        
+        localList.push({
+          id: Math.random().toString(36).substring(2, 9),
+          url: URL.createObjectURL(f.file),
+          name: f.file.name,
+          width: f.width,
+          height: f.height,
+          orientation: f.orientation,
+          optimizedUrl,
+          thumbnailUrl,
+        });
+
+        setProgress(Math.round(((idx + 1) / total) * 100));
+      }
+
+      setUploading(false);
+      onFilesChange([...files, ...localList]);
     }
   };
 

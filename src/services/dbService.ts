@@ -110,7 +110,7 @@ const DEFAULT_ALBUMS: Album[] = [
       passcode: "1234",
       watermark: true,
       allowDownload: false,
-      albumSize: "square-10"
+      albumSize: "10x10"
     },
     status: "Draft",
     updated: "3 days ago",
@@ -146,38 +146,27 @@ const DEFAULT_ALBUMS: Album[] = [
     gradient: "from-slate-900 to-slate-950",
   }
 ];
+import { normalizeAlbum } from "../utils/albumUtils";
 
 export class DbService {
   /**
    * Fetch all albums from localStorage database.
+   * Every album passes through normalizeAlbum() to guarantee settings integrity.
    */
   public static getAlbums(): Album[] {
     const data = localStorage.getItem("snapflip_albums");
     if (!data) {
-      localStorage.setItem("snapflip_albums", JSON.stringify(DEFAULT_ALBUMS));
-      return DEFAULT_ALBUMS;
+      const normalized = DEFAULT_ALBUMS.map((a) => normalizeAlbum(a as unknown as Record<string, unknown>));
+      localStorage.setItem("snapflip_albums", JSON.stringify(normalized));
+      return normalized;
     }
     try {
-      const parsed = JSON.parse(data) as Album[];
-      // Normalize: ensure every album has a valid settings object
-      return parsed.map((album) => ({
-        ...album,
-        settings: {
-          title: "",
-          description: "",
-          theme: "dark-luxury",
-          music: "none",
-          visibility: "Public" as const,
-          passcode: "",
-          watermark: false,
-          allowDownload: true,
-          albumSize: "auto",
-          ...((album as Record<string, unknown>).settings as Record<string, unknown> || {}),
-        },
-      }));
+      const parsed = JSON.parse(data) as Record<string, unknown>[];
+      return parsed.map((a) => normalizeAlbum(a));
     } catch {
-      localStorage.setItem("snapflip_albums", JSON.stringify(DEFAULT_ALBUMS));
-      return DEFAULT_ALBUMS;
+      const normalized = DEFAULT_ALBUMS.map((a) => normalizeAlbum(a as unknown as Record<string, unknown>));
+      localStorage.setItem("snapflip_albums", JSON.stringify(normalized));
+      return normalized;
     }
   }
 
@@ -189,7 +178,7 @@ export class DbService {
   }
 
   /**
-   * Fetch single album by ID.
+   * Fetch single album by ID. Result is always normalized.
    */
   public static getAlbumById(id: string): Album | undefined {
     const albums = this.getAlbums();

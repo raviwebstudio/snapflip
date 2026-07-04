@@ -1,2 +1,2 @@
 // Export custom React hooks here
-export {};
+export { useBookInteraction } from "./useBookInteraction";

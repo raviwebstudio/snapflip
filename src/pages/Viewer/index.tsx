@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   Lock,
@@ -7,15 +7,16 @@ import {
   ArrowRight,
   Download,
   Info,
-  Camera,
   AlertTriangle
 } from "lucide-react";
-import { PageFlip } from "page-flip";
 import { DbService } from "../../services/dbService";
 import type { Album } from "../../services/dbService";
 import { useToastStore } from "../../store";
+import { detectRecommendedSize } from "../../utils/albumUtils";
+import BookEngine, { type BookEngineRef } from "../../components/viewer/BookEngine";
 
-// Error Boundary for the premium viewer experience
+// ─── Error Boundary ─────────────────────────────────────────────────────────
+
 interface ErrorBoundaryProps {
   children: React.ReactNode;
 }
@@ -70,49 +71,7 @@ class ViewerErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBound
   }
 }
 
-// Memoized Page list component to completely prevent React re-renders from conflicting with page-flip library DOM modifications
-const BookPagesList = React.memo(
-  ({
-    totalPhotos,
-    hasFillerPage,
-    totalPages,
-    renderPage
-  }: {
-    totalPhotos: number;
-    hasFillerPage: boolean;
-    totalPages: number;
-    renderPage: (idx: number) => React.ReactNode;
-  }) => {
-    return (
-      <>
-        {/* Page 0: Cover */}
-        <div key="page-cover" className="book-page" data-density="hard">
-          {renderPage(0)}
-        </div>
-
-        {/* Page 1 to N: Photos */}
-        {Array.from({ length: totalPhotos }).map((_, idx) => (
-          <div key={`photo-page-${idx}`} className="book-page" data-density="soft">
-            {renderPage(idx + 1)}
-          </div>
-        ))}
-
-        {/* Filler Page if needed */}
-        {hasFillerPage && (
-          <div key="page-filler" className="book-page" data-density="soft">
-            {renderPage(totalPages - 2)}
-          </div>
-        )}
-
-        {/* Last Page: Back Cover */}
-        <div key="page-back-cover" className="book-page" data-density="hard">
-          {renderPage(totalPages - 1)}
-        </div>
-      </>
-    );
-  },
-  () => true // Never re-render the pages list after initial mount
-);
+// ─── Main Viewer ────────────────────────────────────────────────────────────
 
 function Viewer() {
   const { slug } = useParams<{ slug: string }>();
@@ -125,14 +84,24 @@ function Viewer() {
   const [orientation, setOrientation] = useState<"portrait" | "landscape">("landscape");
   const [isPlayingMusic, setIsPlayingMusic] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
-  
-  // Safe static viewer fallback state (VIEWER-007)
-  const [useFallback, setUseFallback] = useState(false);
-  
-  const containerRef = useRef<HTMLDivElement>(null);
-  const templatesRef = useRef<HTMLDivElement>(null);
-  const pageFlipRef = useRef<PageFlip | null>(null);
-  const isAnimating = useRef(false);
+
+  const bookEngineRef = useRef<BookEngineRef>(null);
+  const infoPanelRef = useRef<HTMLDivElement>(null);
+
+  // Click outside listener to dismiss info popover panel (Dismiss on click outside)
+  useEffect(() => {
+    if (!showInfo) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      if (infoPanelRef.current && !infoPanelRef.current.contains(event.target as Node)) {
+        const toggleBtn = document.getElementById("info-toggle-btn");
+        if (toggleBtn && !toggleBtn.contains(event.target as Node)) {
+          setShowInfo(false);
+        }
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showInfo]);
 
   useEffect(() => {
     if (slug) {
@@ -141,49 +110,45 @@ function Viewer() {
       
       // If public or has no passcode, unlock by default
       if (fetched) {
-        if (fetched.settings.visibility === "Public" || !fetched.settings.passcode) {
+        if (fetched.settings?.visibility === "Public" || !fetched.settings?.passcode) {
           setIsUnlocked(true);
         }
       }
     }
   }, [slug]);
 
-  // Calculations for page index
+  // Calculations for page display info
   const totalPhotos = album ? album.photos.length : 0;
   const hasFillerPage = (totalPhotos + 2) % 2 !== 0;
   const totalPages = totalPhotos + 2 + (hasFillerPage ? 1 : 0);
 
-  const handleNextPage = useCallback(() => {
-    if (useFallback) {
-      setCurrentPage((prev) => {
-        if (prev === 0) return 1;
-        const step = orientation === "landscape" ? 2 : 1;
-        return Math.min(prev + step, totalPages - 1);
-      });
-      return;
+  // Resolve effective album size for auto-detect
+  let resolvedDetectedSize: "Portrait" | "Square" | "Landscape" | undefined = undefined;
+  if (album && album.settings?.albumSize === "auto") {
+    const result = detectRecommendedSize(album.photos);
+    // Extract orientation from recommendation
+    if (result.recommended.includes("portrait")) {
+      resolvedDetectedSize = "Portrait";
+    } else if (result.recommended.includes("10x10") || result.recommended.includes("square")) {
+      resolvedDetectedSize = "Square";
+    } else {
+      resolvedDetectedSize = "Landscape";
     }
-    if (isAnimating.current || !pageFlipRef.current) return;
-    pageFlipRef.current.flipNext();
-  }, [useFallback, orientation, totalPages]);
+  }
 
-  const handlePrevPage = useCallback(() => {
-    if (useFallback) {
-      setCurrentPage((prev) => {
-        if (prev <= 1) return 0;
-        const step = orientation === "landscape" ? 2 : 1;
-        return Math.max(prev - step, 0);
-      });
-      return;
-    }
-    if (isAnimating.current || !pageFlipRef.current) return;
-    pageFlipRef.current.flipPrev();
-  }, [useFallback, orientation]);
+  const handlePageChange = useCallback((pageIndex: number) => {
+    setCurrentPage(pageIndex);
+  }, []);
+
+  const handleOrientationChange = useCallback((newOrientation: "portrait" | "landscape") => {
+    setOrientation(newOrientation);
+  }, []);
 
   const handleUnlock = (e: React.FormEvent) => {
     e.preventDefault();
     if (!album) return;
 
-    if (passcodeInput === album.settings.passcode) {
+    if (passcodeInput === album.settings?.passcode) {
       setIsUnlocked(true);
       addToast("Passcode verified. Collection unlocked!", "success");
     } else {
@@ -192,108 +157,11 @@ function Viewer() {
     }
   };
 
-  // Initialize PageFlip library on container mount
-  useEffect(() => {
-    if (!containerRef.current || !templatesRef.current || !album || !isUnlocked || useFallback) return;
-
-    try {
-      console.log("[Diagnostics] Initializing PageFlip...");
-
-      // 1. Clear container to guarantee a pristine state
-      containerRef.current.innerHTML = "";
-
-      // 2. Clone pristine templates from offscreen DOM to book wrapper
-      const templates = templatesRef.current.querySelectorAll(".book-page");
-      console.log("[Diagnostics] Total pages template elements count:", templates.length);
-
-      if (templates.length === 0) {
-        console.warn("[Diagnostics] No template pages found. Falling back to static viewer.");
-        setUseFallback(true);
-        return;
-      }
-
-      templates.forEach((t) => {
-        const clone = t.cloneNode(true) as HTMLElement;
-        containerRef.current?.appendChild(clone);
-      });
-
-      const pageElements = containerRef.current.querySelectorAll(".book-page");
-      console.log("[Diagnostics] Total pages loaded into book DOM:", pageElements.length);
-
-      const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-      // Use "stretch" as any cast because SizeType compiles away at runtime (const enum)
-      const pageFlip = new PageFlip(containerRef.current, {
-        width: 550,
-        height: 733,
-        size: "stretch" as any,
-        minWidth: 310,
-        maxWidth: 1000,
-        minHeight: 414,
-        maxHeight: 1400,
-        drawShadow: true,
-        flippingTime: prefersReducedMotion ? 50 : 850,
-        usePortrait: true,
-        startPage: 0,
-        autoSize: true,
-        maxShadowOpacity: 0.35,
-        showCover: true,
-        disableFlipByClick: true,
-        showPageCorners: true,
-        clickEventForward: true
-      });
-
-      pageFlipRef.current = pageFlip;
-      pageFlip.loadFromHTML(pageElements as any);
-
-      // Set up event listeners
-      pageFlip.on("flip", (e) => {
-        const pageIdx = e.data as number;
-        setCurrentPage(pageIdx);
-        console.log("[Diagnostics] Current page index shifted to:", pageIdx);
-      });
-
-      pageFlip.on("updateOrientation", (e) => {
-        setOrientation(e.data as "portrait" | "landscape");
-      });
-
-      pageFlip.on("changeState", (e) => {
-        const state = e.data as string;
-        isAnimating.current = (state === "flipping");
-      });
-
-      console.log("[Diagnostics] Flipbook initialized successfully.");
-    } catch (err) {
-      console.error("[Diagnostics] PageFlip failed to initialize, falling back to static viewer:", err);
-      setUseFallback(true);
-    }
-
-    return () => {
-      if (pageFlipRef.current) {
-        pageFlipRef.current.destroy();
-        pageFlipRef.current = null;
-      }
-    };
-  }, [album, isUnlocked, useFallback]);
-
-  // Keyboard navigation listener (← →)
-  useEffect(() => {
-    const handleGlobalKeys = (e: KeyboardEvent) => {
-      if (e.key === "ArrowRight" || e.key === "Right") {
-        handleNextPage();
-      } else if (e.key === "ArrowLeft" || e.key === "Left") {
-        handlePrevPage();
-      }
-    };
-    window.addEventListener("keydown", handleGlobalKeys);
-    return () => window.removeEventListener("keydown", handleGlobalKeys);
-  }, [handleNextPage, handlePrevPage]);
-
   const handleToggleMusic = () => {
     if (!album) return;
     setIsPlayingMusic(!isPlayingMusic);
     if (!isPlayingMusic) {
-      addToast(`Playing background soundtrack: "${album.settings.music.replace("-", " ")}"`, "info");
+      addToast(`Playing background soundtrack: "${album.settings?.music?.replace("-", " ") ?? "unknown"}"`, "info");
     } else {
       addToast("Soundtrack muted", "info");
     }
@@ -301,7 +169,7 @@ function Viewer() {
 
   const handleDownloadPhotos = () => {
     if (!album) return;
-    if (!album.settings.allowDownload) {
+    if (!album.settings?.allowDownload) {
       addToast("Downloads are disabled for this collection by the studio.", "warning");
       return;
     }
@@ -311,114 +179,7 @@ function Viewer() {
     }, 2000);
   };
 
-  // Reusable page rendering helper
-  const renderPage = (idx: number) => {
-    if (!album) return null;
-
-    if (idx === 0) {
-      // Cover page rendering
-      return (
-        <div className="relative w-full h-full bg-slate-900 flex flex-col justify-between p-8 text-center border-r border-slate-950/40">
-          {album.coverImage && (
-            <img src={album.coverImage} alt="Cover" className="absolute inset-0 h-full w-full object-cover opacity-45" />
-          )}
-          <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-transparent to-slate-950/90 z-0" />
-          <div className="relative z-10 space-y-2">
-            <Camera className="h-8 w-8 mx-auto text-sky-400" />
-            <span className="text-[10px] font-mono uppercase tracking-widest text-sky-400">Exclusive Showcase</span>
-          </div>
-          <div className="relative z-10 space-y-3">
-            <h2 className="text-xl font-extrabold text-white leading-tight uppercase tracking-wider">{album.name}</h2>
-            <div className="h-0.5 w-12 bg-sky-400 mx-auto" />
-            <p className="text-xs text-slate-355 font-mono tracking-widest">{album.coupleName}</p>
-          </div>
-          <div className="relative z-10">
-            <span className="text-[9px] font-mono uppercase tracking-widest text-slate-500">Staged on SnapFlip</span>
-          </div>
-        </div>
-      );
-    }
-
-    if (idx === totalPages - 1) {
-      // Back Cover page rendering
-      return (
-        <div className="relative w-full h-full bg-slate-950 flex flex-col items-center justify-center p-8 text-center border-l border-slate-900">
-          <Camera className="h-8 w-8 text-sky-500 mb-2" />
-          <h4 className="text-sm font-bold uppercase tracking-wider text-slate-300">The End</h4>
-          <p className="text-[10px] text-slate-555 mt-1">SnapFlip Album Showcase</p>
-        </div>
-      );
-    }
-
-    if (hasFillerPage && idx === totalPages - 2) {
-      // Filler blank page rendering
-      return (
-        <div className="relative w-full h-full bg-slate-900/60 flex flex-col items-center justify-center p-8 text-center border-r border-slate-950/20">
-          <span className="text-[9px] font-mono text-slate-500 uppercase tracking-widest">End of Album</span>
-        </div>
-      );
-    }
-
-    // Inside photo pages
-    const photoIdx = idx - 1;
-    const photo = album.photos[photoIdx];
-    if (!photo) return null;
-
-    return (
-      <div className="relative w-full h-full overflow-hidden bg-slate-955 flex items-center justify-center border-x border-slate-950/20">
-        <img src={photo.url} alt={photo.name} className="h-full w-full object-cover" />
-        {album.settings.watermark && (
-          <div className="absolute inset-0 bg-slate-950/10 flex items-center justify-center pointer-events-none select-none">
-            <span className="text-[9px] uppercase font-bold tracking-widest text-white/20 border border-white/15 px-2.5 py-1 rounded rotate-12">
-              © {album.coupleName || "SnapFlip"}
-            </span>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // Static Fallback layout if PageFlip fails
-  const renderStaticFallback = () => {
-    if (currentPage === 0) {
-      return (
-        <div className="w-full max-w-[420px] aspect-[0.75] rounded-xl overflow-hidden shadow-2xl relative border border-slate-800">
-          {renderPage(0)}
-        </div>
-      );
-    }
-
-    if (currentPage === totalPages - 1) {
-      return (
-        <div className="w-full max-w-[420px] aspect-[0.75] rounded-xl overflow-hidden shadow-2xl relative border border-slate-800">
-          {renderPage(totalPages - 1)}
-        </div>
-      );
-    }
-
-    if (orientation === "portrait") {
-      return (
-        <div className="w-full max-w-[420px] aspect-[0.75] rounded-xl overflow-hidden shadow-2xl relative border border-slate-800">
-          {renderPage(currentPage)}
-        </div>
-      );
-    }
-
-    return (
-      <div className="w-full max-w-4xl grid grid-cols-2 gap-4">
-        <div className="w-full aspect-[0.75] rounded-xl overflow-hidden shadow-2xl relative border border-slate-800 bg-slate-900">
-          {renderPage(currentPage)}
-        </div>
-        <div className="w-full aspect-[0.75] rounded-xl overflow-hidden shadow-2xl relative border border-slate-800 bg-slate-900">
-          {currentPage + 1 < totalPages - 1 ? renderPage(currentPage + 1) : (
-            <div className="w-full h-full bg-slate-950 flex items-center justify-center border border-slate-900/60 rounded-2xl">
-              <span className="text-[9px] font-mono text-slate-700 uppercase tracking-widest">End of Album</span>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
+  // ─── Not Found ──────────────────────────────────────────────────────────
 
   if (!album) {
     return (
@@ -440,7 +201,8 @@ function Viewer() {
     );
   }
 
-  // If locked, render passcode prompt screen
+  // ─── Passcode Lock ──────────────────────────────────────────────────────
+
   if (!isUnlocked) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
@@ -480,45 +242,12 @@ function Viewer() {
     );
   }
 
-  return (
-    <div className="min-h-screen transition-colors duration-300 flex flex-col justify-between bg-slate-950 text-slate-100">
-      {/* CSS Styles for the PageFlip library integration */}
-      <style dangerouslySetInnerHTML={{ __html: `
-        .st-page-flip-wrapper {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          width: 100%;
-          height: 100%;
-          position: relative;
-        }
-        .st-page-flip {
-          position: relative;
-          box-shadow: 0 30px 80px -15px rgba(0, 0, 0, 0.9);
-          border-radius: 12px;
-          overflow: hidden;
-          background-color: #030712;
-        }
-        .book-page {
-          width: 100%;
-          height: 100%;
-          position: absolute;
-          left: 0;
-          top: 0;
-          display: flex;
-          flex-direction: column;
-          overflow: hidden;
-          background-color: #0b0f19;
-          box-shadow: inset 0 0 45px rgba(0, 0, 0, 0.6);
-        }
-        .book-page[data-density="hard"] {
-          background-color: #0f172a;
-          box-shadow: inset 0 0 55px rgba(0, 0, 0, 0.8);
-        }
-      ` }} />
+  // ─── Main Viewer Layout ─────────────────────────────────────────────────
 
+  return (
+    <div className="h-screen overflow-hidden transition-colors duration-300 flex flex-col justify-between bg-slate-950 text-slate-100 relative">
       {/* 1. Header controls */}
-      <header className="h-16 px-4 sm:px-6 lg:px-8 border-b flex items-center justify-between z-10 border-slate-900 bg-slate-955/80 backdrop-blur-md">
+      <header className="h-16 px-4 sm:px-6 lg:px-8 border-b flex items-center justify-between z-10 border-slate-900 bg-slate-950/80 backdrop-blur-md shrink-0">
         <div className="flex items-center gap-3">
           <Link
             to="/dashboard?tab=albums"
@@ -534,6 +263,7 @@ function Viewer() {
         <div className="flex items-center gap-3">
           {/* Info Toggle */}
           <button
+            id="info-toggle-btn"
             onClick={() => setShowInfo(!showInfo)}
             className={`h-9 w-9 rounded-lg border flex items-center justify-center transition-colors cursor-pointer border-slate-800 text-slate-400 hover:text-white ${
               showInfo ? "bg-sky-500/10 text-sky-400 border-sky-500/30" : ""
@@ -544,7 +274,7 @@ function Viewer() {
           </button>
 
           {/* Background Music Toggle */}
-          {album.settings.music && album.settings.music !== "none" && (
+          {album.settings?.music && album.settings?.music !== "none" && (
             <button
               onClick={handleToggleMusic}
               className={`h-9 w-9 rounded-lg border flex items-center justify-center transition-colors cursor-pointer border-slate-800 text-slate-400 hover:text-white relative ${
@@ -560,7 +290,7 @@ function Viewer() {
           )}
 
           {/* Download Button */}
-          {album.settings.allowDownload && (
+          {album.settings?.allowDownload && (
             <button
               onClick={handleDownloadPhotos}
               className="h-9 items-center justify-center rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold px-3 text-xs uppercase tracking-wider flex gap-1.5 cursor-pointer shadow-md shadow-sky-500/10"
@@ -573,23 +303,29 @@ function Viewer() {
         </div>
       </header>
 
-      {/* 2. Spread Info Panel (Conditional overlay) */}
+      {/* 2. Info Panel (Absolute Popover Overlay to avoid layout shifts) */}
       {showInfo && (
-        <div className="p-4 border-b text-xs leading-relaxed bg-slate-955/95 border-slate-900 text-slate-300">
-          <div className="max-w-2xl mx-auto space-y-2">
-            <h4 className="font-bold text-slate-200 uppercase tracking-wider text-[10px]">Description</h4>
-            <p className="text-slate-450">{album.settings.description || "No description provided for this collection."}</p>
-            <div className="flex flex-wrap gap-x-6 gap-y-1 text-[10px] font-mono text-slate-500 pt-1 border-t border-slate-900/60 mt-2">
-              <span>Client: {album.coupleName}</span>
-              <span>Event: {album.eventType} ({album.eventDate})</span>
-              <span>Size Format: {album.settings.albumSize}</span>
-            </div>
+        <div
+          ref={infoPanelRef}
+          className="absolute right-4 top-18 md:right-8 w-[calc(100vw-32px)] md:w-96 rounded-2xl border border-slate-900 bg-slate-950/95 backdrop-blur-md p-5 text-xs leading-relaxed text-slate-350 z-30 shadow-2xl space-y-3"
+        >
+          <h4 className="font-bold text-slate-200 uppercase tracking-wider text-[10px] border-b border-slate-900 pb-2">
+            Collection Details
+          </h4>
+          <p className="text-slate-400">
+            {album.settings?.description || "No description provided for this collection."}
+          </p>
+          <div className="flex flex-col gap-2 text-[10px] font-mono text-slate-500 pt-1">
+            <div>Client: <span className="text-slate-305">{album.coupleName || "Unspecified"}</span></div>
+            <div>Event Type: <span className="text-slate-305 capitalize">{album.eventType || "None"}</span></div>
+            <div>Event Date: <span className="text-slate-305">{album.eventDate || "None"}</span></div>
+            <div>Layout Size: <span className="text-slate-305 uppercase">{album.settings?.albumSize ?? "Auto"}</span></div>
           </div>
         </div>
       )}
 
-      {/* 3. Main Flipbook spread display area */}
-      <main className="flex-1 flex items-center justify-center p-4 md:p-8 relative">
+      {/* 3. Main Book Display Area */}
+      <main className="flex-1 flex flex-col justify-between p-4 md:p-6 relative overflow-hidden">
         {/* Animated equalizer bars for music */}
         {isPlayingMusic && (
           <div className="absolute top-4 left-4 flex gap-0.5 items-end h-4 shrink-0 opacity-60">
@@ -600,86 +336,91 @@ function Viewer() {
           </div>
         )}
 
-        {/* Templates Hidden Node Container (Managed fully by React) */}
-        <div style={{ display: "none" }} ref={templatesRef}>
-          <BookPagesList
-            totalPhotos={totalPhotos}
-            hasFillerPage={hasFillerPage}
-            totalPages={totalPages}
-            renderPage={renderPage}
-          />
-        </div>
-
-        {/* Spread Container */}
-        <div className="max-w-5xl w-full flex flex-col items-center gap-6">
-          {/* Flipbook Frame */}
-          <div className="w-full flex justify-center items-center py-4 flex-1 min-h-[50vh] max-h-[70vh] relative">
-            {useFallback ? (
-              renderStaticFallback()
-            ) : (
-              <div className="st-page-flip-wrapper">
-                <div ref={containerRef} className="st-page-flip select-none" />
-              </div>
-            )}
+        {/* Book Container - Flex layout with centered content */}
+        <div className="w-full flex-1 flex flex-col items-center justify-center gap-4 overflow-hidden">
+          {/* BookEngine Wrapper */}
+          <div className="w-full flex justify-center items-center flex-1 max-h-[calc(100vh-220px)] relative">
+            <BookEngine
+              ref={bookEngineRef}
+              photos={album.photos}
+              albumSize={album.settings?.albumSize ?? "auto"}
+              customWidth={album.settings?.customWidth}
+              customHeight={album.settings?.customHeight}
+              detectedSize={album.settings?.detectedSize ?? resolvedDetectedSize}
+              albumTitle={album.name}
+              coupleName={album.coupleName}
+              watermark={album.settings?.watermark ?? false}
+              watermarkText={album.coupleName || "SnapFlip"}
+              coverImage={album.coverImage}
+              onPageChange={handlePageChange}
+              onOrientationChange={handleOrientationChange}
+            />
           </div>
 
-          {/* Individual Page Numbers */}
-          {currentPage > 0 && currentPage < totalPages - 1 && (
-            <div className="text-[10px] font-mono text-slate-400 tracking-wider">
-              {orientation === "landscape" && !useFallback ? (
-                (() => {
-                  const leftIdx = currentPage;
-                  const rightIdx = currentPage + 1;
-                  const leftLabel = leftIdx <= totalPhotos ? `Page ${leftIdx}` : "";
-                  const rightLabel = rightIdx <= totalPhotos ? `Page ${rightIdx}` : "";
-                  if (leftLabel && rightLabel) {
-                    return `${leftLabel} | ${rightLabel}`;
-                  }
-                  return leftLabel || rightLabel || "";
-                })()
-              ) : (
-                `Page ${currentPage}`
-              )}
+          {/* Bottom Controls Area (Pagination and Next/Prev buttons) */}
+          <div className="flex flex-col items-center gap-3 shrink-0 pb-2">
+            {/* Page Numbers */}
+            {currentPage > 0 && currentPage < totalPages - 1 && (
+              <div className="text-[10px] font-mono text-slate-400 tracking-wider">
+                {orientation === "landscape" ? (
+                  (() => {
+                    const leftIdx = currentPage;
+                    const rightIdx = currentPage + 1;
+                    const leftLabel = leftIdx <= totalPhotos ? `Page ${leftIdx}` : "";
+                    const rightLabel = rightIdx <= totalPhotos ? `Page ${rightIdx}` : "";
+                    if (leftLabel && rightLabel) {
+                      return `${leftLabel} | ${rightLabel}`;
+                    }
+                    return leftLabel || rightLabel || "";
+                  })()
+                ) : (
+                  `Page ${currentPage}`
+                )}
+              </div>
+            )}
+
+            {/* Navigation Buttons and Spread Indicator */}
+            <div className="flex items-center gap-6">
+              <button
+                onClick={() => {
+                  bookEngineRef.current?.flipPrev();
+                }}
+                disabled={currentPage === 0}
+                className="h-10 w-10 rounded-full border border-slate-800 bg-slate-900/40 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Previous Page"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+              
+              <span className="text-xs font-mono tracking-wider font-semibold text-slate-300 select-none">
+                {currentPage === 0 ? (
+                  "Cover Page"
+                ) : currentPage >= totalPages - 1 ? (
+                  "Back Cover"
+                ) : orientation === "landscape" ? (
+                  `Spread ${Math.floor((currentPage - 1) / 2) + 1} of ${Math.floor((totalPages - 2) / 2) + 1}`
+                ) : (
+                  `Page ${currentPage} of ${totalPhotos}`
+                )}
+              </span>
+
+              <button
+                onClick={() => {
+                  bookEngineRef.current?.flipNext();
+                }}
+                disabled={currentPage >= totalPages - 1}
+                className="h-10 w-10 rounded-full border border-slate-800 bg-slate-900/40 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                title="Next Page"
+              >
+                <ArrowRight className="h-4 w-4" />
+              </button>
             </div>
-          )}
-
-          {/* Navigation Controls & Spread Indicator */}
-          <div className="flex items-center gap-6 mt-1">
-            <button
-              onClick={handlePrevPage}
-              disabled={currentPage === 0}
-              className="h-10 w-10 rounded-full border border-slate-800 bg-slate-900/40 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Previous Page"
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-            
-            <span className="text-xs font-mono tracking-wider font-semibold text-slate-300 select-none">
-              {currentPage === 0 ? (
-                "Cover Page"
-              ) : currentPage === totalPages - 1 ? (
-                "Back Cover"
-              ) : (orientation === "landscape" && !useFallback) ? (
-                `Spread ${Math.floor((currentPage - 1) / 2) + 1} of ${Math.floor((totalPages - 2) / 2) + 1}`
-              ) : (
-                `Page ${currentPage} of ${totalPhotos}`
-              )}
-            </span>
-
-            <button
-              onClick={handleNextPage}
-              disabled={currentPage === totalPages - 1}
-              className="h-10 w-10 rounded-full border border-slate-800 bg-slate-900/40 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-              title="Next Page"
-            >
-              <ArrowRight className="h-4 w-4" />
-            </button>
           </div>
         </div>
       </main>
 
       {/* 4. Footer credits */}
-      <footer className="h-12 px-4 border-t flex items-center justify-center z-10 text-[10px] font-mono text-slate-500 uppercase tracking-widest border-slate-900 bg-slate-950/60">
+      <footer className="h-12 px-4 border-t flex items-center justify-center z-10 text-[10px] font-mono text-slate-500 uppercase tracking-widest border-slate-900 bg-slate-950/60 shrink-0">
         Powered by SnapFlip
       </footer>
     </div>
