@@ -298,8 +298,9 @@ export default function CreateAlbum() {
       setTimeout(() => {
         navigate("/dashboard?tab=albums");
       }, 2000);
-    } catch {
-      addToast("Failed to save draft.", "error");
+    } catch (error: any) {
+      console.error("Save Draft Error:", error);
+      addToast(`Failed to save draft: ${error.message || error}`, "error");
     }
   };
 
@@ -340,8 +341,9 @@ export default function CreateAlbum() {
       setTimeout(() => {
         navigate("/dashboard?tab=albums");
       }, 2000);
-    } catch {
-      addToast("Failed to publish album.", "error");
+    } catch (error: any) {
+      console.error("Publish Album Error:", error);
+      addToast(`Failed to publish album: ${error.message || error}`, "error");
     }
   };
 

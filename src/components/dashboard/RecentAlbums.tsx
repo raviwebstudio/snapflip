@@ -137,6 +137,13 @@ export default function RecentAlbums() {
     refreshAlbums();
   }, [searchVal]);
 
+  // Sync when IndexedDB binaries load
+  useEffect(() => {
+    return DbService.onBinariesLoaded(() => {
+      refreshAlbums();
+    });
+  }, []);
+
   const handleDuplicate = (id: string) => {
     try {
       DbService.duplicateAlbum(id);
@@ -281,23 +288,167 @@ export default function RecentAlbums() {
 
   const handleDownloadPng = () => {
     if (!shareState.qrPng || !shareState.album) return;
-    const link = document.createElement("a");
-    link.href = shareState.qrPng;
-    link.download = `qr-${shareState.album.name.toLowerCase().replace(/\s+/g, "-")}.png`;
-    link.click();
-    addToast("QR Code PNG download started!", "success");
+    const { name, coupleName, id } = shareState.album;
+    const url = `${window.location.origin}/view/${id}`;
+    const qrPng = shareState.qrPng;
+
+    const SCALE = 2;
+    const W = 360 * SCALE; // 720
+    const H = 540 * SCALE; // 1080
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    // Helper to draw rounded rects
+    const roundRect = (x: number, y: number, w: number, h: number, r: number) => {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    };
+
+    // 1. Background fill
+    ctx.fillStyle = "#0c111a";
+    ctx.fillRect(0, 0, W, H);
+
+    // 2. Card border rounded rect
+    const cardPad = 20 * SCALE;
+    const cardW = W - cardPad * 2;
+    const cardH = H - cardPad * 2;
+    const cardR = 24 * SCALE;
+    roundRect(cardPad, cardPad, cardW, cardH, cardR);
+    ctx.strokeStyle = "#1e293b";
+    ctx.lineWidth = 2 * SCALE;
+    ctx.stroke();
+    ctx.fillStyle = "#0f172a";
+    ctx.fill();
+
+    // 3. SNAPFLIP logo
+    const logoY = cardPad + 48 * SCALE;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = `800 ${20 * SCALE}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    ctx.fillStyle = "#ffffff";
+    const logoLeft = "SNAP";
+    const logoRight = "FLIP";
+    const leftW = ctx.measureText(logoLeft).width;
+    const rightW = ctx.measureText(logoRight).width;
+    const totalLogoW = leftW + rightW;
+    const logoStartX = W / 2 - totalLogoW / 2;
+    ctx.textAlign = "left";
+    ctx.fillText(logoLeft, logoStartX, logoY);
+    ctx.fillStyle = "#38bdf8";
+    ctx.fillText(logoRight, logoStartX + leftW, logoY);
+
+    // 4. Album title
+    const titleY = logoY + 48 * SCALE;
+    ctx.textAlign = "center";
+    ctx.font = `800 ${18 * SCALE}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText(name.toUpperCase(), W / 2, titleY);
+
+    // 5. Client/couple name
+    const clientY = titleY + 24 * SCALE;
+    ctx.font = `400 ${12 * SCALE}px monospace`;
+    ctx.fillStyle = "#94a3b8";
+    ctx.fillText(coupleName || "Collection", W / 2, clientY);
+
+    // 6. QR Code in white rounded frame
+    const qrImg = new Image();
+    qrImg.onload = () => {
+      const qrSize = 180 * SCALE;
+      const qrFramePad = 16 * SCALE;
+      const qrFrameSize = qrSize + qrFramePad * 2;
+      const qrFrameX = W / 2 - qrFrameSize / 2;
+      const qrFrameY = clientY + 32 * SCALE;
+      const qrFrameR = 16 * SCALE;
+
+      roundRect(qrFrameX, qrFrameY, qrFrameSize, qrFrameSize, qrFrameR);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+
+      ctx.drawImage(qrImg, qrFrameX + qrFramePad, qrFrameY + qrFramePad, qrSize, qrSize);
+
+      // 7. "Scan to View Album" text
+      const scanY = qrFrameY + qrFrameSize + 32 * SCALE;
+      ctx.textAlign = "center";
+      ctx.font = `700 ${11 * SCALE}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+      ctx.fillStyle = "#38bdf8";
+      ctx.fillText("SCAN TO VIEW ALBUM", W / 2, scanY);
+
+      // 8. URL text
+      const urlY = scanY + 18 * SCALE;
+      ctx.font = `400 ${9 * SCALE}px monospace`;
+      ctx.fillStyle = "#64748b";
+      ctx.fillText(url, W / 2, urlY);
+
+      // 9. Separator line
+      const sepY = urlY + 36 * SCALE;
+      ctx.strokeStyle = "#1e293b";
+      ctx.lineWidth = 1 * SCALE;
+      ctx.beginPath();
+      ctx.moveTo(cardPad + 40 * SCALE, sepY);
+      ctx.lineTo(W - cardPad - 40 * SCALE, sepY);
+      ctx.stroke();
+
+      // 10. "POWERED BY SNAPFLIP" footer
+      const footY = sepY + 24 * SCALE;
+      ctx.font = `400 ${9 * SCALE}px monospace`;
+      ctx.fillStyle = "#475569";
+      ctx.fillText("POWERED BY SNAPFLIP", W / 2, footY);
+
+      // Download
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = `qr-card-${name.toLowerCase().replace(/\s+/g, "-")}.png`;
+      link.click();
+    };
+    qrImg.src = qrPng;
+    addToast("QR Card PNG download started!", "success");
   };
 
   const handleDownloadSvg = () => {
-    if (!shareState.qrSvg || !shareState.album) return;
-    const blob = new Blob([shareState.qrSvg], { type: "image/svg+xml" });
-    const url = URL.createObjectURL(blob);
+    if (!shareState.qrPng || !shareState.album) return;
+    const { name, coupleName, id } = shareState.album;
+    const viewUrl = `${window.location.origin}/view/${id}`;
+    const qrPng = shareState.qrPng;
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="540" viewBox="0 0 360 540">
+  <defs>
+    <clipPath id="card-clip"><rect x="20" y="20" width="320" height="500" rx="24" ry="24"/></clipPath>
+  </defs>
+  <rect width="360" height="540" fill="#0c111a"/>
+  <rect x="20" y="20" width="320" height="500" rx="24" ry="24" fill="#0f172a" stroke="#1e293b" stroke-width="1.5"/>
+  <text x="180" y="58" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-weight="800" font-size="20" letter-spacing="0.05em">
+    <tspan fill="#ffffff">SNAP</tspan><tspan fill="#38bdf8">FLIP</tspan>
+  </text>
+  <text x="180" y="100" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-weight="800" font-size="18" fill="#ffffff" letter-spacing="0.05em">${name.toUpperCase().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</text>
+  <text x="180" y="120" text-anchor="middle" font-family="monospace" font-size="12" fill="#94a3b8" letter-spacing="0.1em">${(coupleName || "Collection").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</text>
+  <rect x="90" y="140" width="180" height="180" rx="16" ry="16" fill="#ffffff"/>
+  <image href="${qrPng}" x="100" y="150" width="160" height="160" clip-path="url(#card-clip)"/>
+  <text x="180" y="348" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-weight="700" font-size="11" fill="#38bdf8" letter-spacing="0.15em">SCAN TO VIEW ALBUM</text>
+  <text x="180" y="366" text-anchor="middle" font-family="monospace" font-size="9" fill="#64748b">${viewUrl.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</text>
+  <line x1="60" y1="400" x2="300" y2="400" stroke="#1e293b" stroke-width="1"/>
+  <text x="180" y="424" text-anchor="middle" font-family="monospace" font-size="9" fill="#475569" letter-spacing="0.15em">POWERED BY SNAPFLIP</text>
+</svg>`;
+
+    const blob = new Blob([svg], { type: "image/svg+xml" });
+    const blobUrl = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.href = url;
-    link.download = `qr-${shareState.album.name.toLowerCase().replace(/\s+/g, "-")}.svg`;
+    link.href = blobUrl;
+    link.download = `qr-card-${name.toLowerCase().replace(/\s+/g, "-")}.svg`;
     link.click();
-    URL.revokeObjectURL(url);
-    addToast("QR Code SVG download started!", "success");
+    URL.revokeObjectURL(blobUrl);
+    addToast("QR Card SVG download started!", "success");
   };
 
   const handlePrintQR = () => {
@@ -320,7 +471,7 @@ export default function RecentAlbums() {
             body {
               margin: 0;
               font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-              background-color: #020617;
+              background-color: #0c111a;
               color: #ffffff;
               display: flex;
               align-items: center;
@@ -328,6 +479,7 @@ export default function RecentAlbums() {
               min-height: 100vh;
               -webkit-print-color-adjust: exact;
               print-color-adjust: exact;
+              color-adjust: exact;
             }
             .qr-card {
               border: 1px solid #1e293b;
@@ -408,32 +560,38 @@ export default function RecentAlbums() {
             }
             @media print {
               body {
-                background: #ffffff !important;
-                color: #000000 !important;
+                background-color: #0c111a !important;
+                color: #ffffff !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
               }
               .qr-card {
-                border: none !important;
-                background: #ffffff !important;
+                background: #0f172a !important;
+                border: 1px solid #1e293b !important;
                 box-shadow: none !important;
-                color: #000000 !important;
-                max-width: 100% !important;
-                padding: 0 !important;
               }
-              .logo, .logo span {
-                color: #000000 !important;
+              .logo {
+                color: #ffffff !important;
+              }
+              .logo span {
+                color: #38bdf8 !important;
+              }
+              .album-name {
+                color: #ffffff !important;
               }
               .client-name {
-                color: #475569 !important;
+                color: #94a3b8 !important;
               }
               .scan-text {
-                color: #000000 !important;
+                color: #38bdf8 !important;
               }
               .url-text {
-                color: #475569 !important;
+                color: #64748b !important;
               }
               .footer {
                 color: #475569 !important;
-                border-top: 1px solid #e2e8f0 !important;
+                border-top: 1px solid #1e293b !important;
               }
             }
           </style>

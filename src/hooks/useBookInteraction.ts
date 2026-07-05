@@ -31,6 +31,8 @@ interface UseBookInteractionOptions {
   isLastPage: boolean;
   /** Whether the book is in single-page (portrait/mobile) mode */
   isSinglePage: boolean;
+  /** Optional callback to notify parent of manual interaction */
+  onInteraction?: () => void;
 }
 
 interface UseBookInteractionReturn {
@@ -57,6 +59,7 @@ export function useBookInteraction({
   isFirstPage,
   isLastPage,
   isSinglePage,
+  onInteraction,
 }: UseBookInteractionOptions): UseBookInteractionReturn {
   const containerRef = useRef<HTMLDivElement>(null);
   const dragStateRef = useRef<DragState>({
@@ -87,6 +90,7 @@ export function useBookInteraction({
   const handlePointerDown = useCallback(
     (e: PointerEvent) => {
       if (isAnimating) return;
+      onInteraction?.();
       const container = containerRef.current;
       if (!container) return;
 
@@ -132,7 +136,7 @@ export function useBookInteraction({
 
       container.setPointerCapture(e.pointerId);
     },
-    [isAnimating, isSinglePage]
+    [isAnimating, isSinglePage, onInteraction]
   );
 
   const handlePointerMove = useCallback(
@@ -228,14 +232,20 @@ export function useBookInteraction({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (isAnimating) return;
       if (e.key === "ArrowRight" || e.key === "Right") {
-        if (!isLastPage) onNext();
+        if (!isLastPage) {
+          onInteraction?.();
+          onNext();
+        }
       } else if (e.key === "ArrowLeft" || e.key === "Left") {
-        if (!isFirstPage) onPrev();
+        if (!isFirstPage) {
+          onInteraction?.();
+          onPrev();
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onNext, onPrev, isAnimating, isFirstPage, isLastPage]);
+  }, [onNext, onPrev, isAnimating, isFirstPage, isLastPage, onInteraction]);
 
   // Attach pointer event listeners
   useEffect(() => {

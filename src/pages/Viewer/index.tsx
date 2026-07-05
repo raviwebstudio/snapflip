@@ -105,15 +105,20 @@ function Viewer() {
 
   useEffect(() => {
     if (slug) {
-      const fetched = DbService.getAlbumById(slug);
-      setAlbum(fetched);
-      
-      // If public or has no passcode, unlock by default
-      if (fetched) {
-        if (fetched.settings?.visibility === "Public" || !fetched.settings?.passcode) {
-          setIsUnlocked(true);
+      const refresh = () => {
+        const fetched = DbService.getAlbumById(slug);
+        setAlbum(fetched);
+        
+        // If public or has no passcode, unlock by default
+        if (fetched) {
+          if (fetched.settings?.visibility === "Public" || !fetched.settings?.passcode) {
+            setIsUnlocked(true);
+          }
         }
-      }
+      };
+
+      refresh();
+      return DbService.onBinariesLoaded(refresh);
     }
   }, [slug]);
 

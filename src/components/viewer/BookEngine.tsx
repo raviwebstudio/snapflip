@@ -31,8 +31,11 @@ interface BookEngineProps {
   watermark: boolean;
   watermarkText: string;
   coverImage?: string;
+  /** Override the page max-height (default: calc(100vh - 220px)). Pass a CSS value like '380px'. */
+  maxHeight?: string;
   onPageChange?: (pageIndex: number) => void;
   onOrientationChange?: (orientation: "portrait" | "landscape") => void;
+  onInteraction?: () => void;
 }
 
 // ─── Leaf-based Page Types ────────────────────────────────────────────────────
@@ -64,13 +67,17 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
   watermark,
   watermarkText,
   coverImage,
+  maxHeight,
   onPageChange,
   onOrientationChange,
+  onInteraction,
 }, ref) => {
   const [currentPage, setCurrentPage] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
   const [isSinglePage, setIsSinglePage] = useState(false);
-  
+  const [containerSize, setContainerSize] = useState<{ width: number; height: number } | null>(null);
+  const localContainerRef = useRef<HTMLDivElement | null>(null);
+
   // Track active leaf indices that are being animated/transitioned
   const [animatingLeaf, setAnimatingLeaf] = useState<{
     leafIndex: number;
@@ -84,7 +91,7 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
   // 1. Build Pages Flat Array
   const pages = useMemo((): BookPage[] => {
     const arr: BookPage[] = [];
-    
+
     // Front Cover (hard)
     arr.push({ type: "cover", isHard: true });
 
@@ -114,7 +121,7 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
   const leaves = useMemo((): BookLeaf[] => {
     const arr: BookLeaf[] = [];
     const numLeaves = Math.ceil(totalPages / 2);
-    
+
     for (let i = 0; i < numLeaves; i++) {
       arr.push({
         leafIndex: i,
@@ -127,10 +134,10 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
 
   const totalLeaves = leaves.length;
 
-  // Current active leaf on the right side of the spread
+  // Current active leaf
   const currentLeaf = useMemo(() => {
     if (isSinglePage) {
-      return currentPage;
+      return Math.floor(currentPage / 2);
     }
     return Math.ceil(currentPage / 2);
   }, [currentPage, isSinglePage]);
@@ -144,13 +151,16 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
   // Handle responsive viewport single/double spread detection
   useEffect(() => {
     const checkSinglePage = () => {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      
-      // Force single page if mobile width OR landscape mobile (short viewport)
+      const container = localContainerRef.current;
+      const width = container ? container.clientWidth : window.innerWidth;
+      const height = container ? container.clientHeight : window.innerHeight;
+
+      // Force single page if width < 769 OR short container height
       const newSinglePage = width < 769 || (height < 500 && width < 950);
       setIsSinglePage(newSinglePage);
       onOrientationChange?.(newSinglePage ? "portrait" : "landscape");
+      
+      setContainerSize({ width, height });
     };
 
     checkSinglePage();
@@ -159,8 +169,8 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
       checkSinglePage();
     });
 
-    if (bookWrapperRef.current) {
-      resizeObserverRef.current.observe(bookWrapperRef.current);
+    if (localContainerRef.current) {
+      resizeObserverRef.current.observe(localContainerRef.current);
     }
 
     window.addEventListener("resize", checkSinglePage);
@@ -255,12 +265,13 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
     isFirstPage: currentPage === 0,
     isLastPage: currentPage >= totalPages - 1,
     isSinglePage,
+    onInteraction,
   });
 
   // Calculate live drag transformation values for active leaf
   const getDragStyle = (leafIdx: number) => {
     if (!isDragging || isSinglePage) return undefined;
-    
+
     // Forward drag (turning next): active leaf is currentLeaf
     if (dragDirection === -1 && leafIdx === currentLeaf) {
       const angle = -180 * dragProgress;
@@ -270,7 +281,7 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
         zIndex: 50,
       };
     }
-    
+
     // Backward drag (turning prev): active leaf is currentLeaf - 1
     if (dragDirection === 1 && leafIdx === currentLeaf - 1) {
       const angle = -180 + (180 * dragProgress);
@@ -288,26 +299,81 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
 
   const pageStyle = useMemo(() => {
     const aspectRatio = dimensions.width / dimensions.height;
+    
+    // Determine the baseline available dimensions
+    let availableW = window.innerWidth;
+    let availableH = window.innerHeight;
+    let limitH = availableH - 220;
+
+    if (containerSize) {
+      availableW = containerSize.width;
+      availableH = containerSize.height;
+      // Since container is already constrained by layout, just use its height with small padding
+      limitH = availableH - 20;
+    } else if (maxHeight) {
+      const parsed = parseInt(maxHeight, 10);
+      if (!isNaN(parsed)) {
+        limitH = parsed;
+      }
+    }
+    const maxBookW = Math.max(availableW - 40, 200);
+    const maxBookH = Math.max(limitH, 150);
+
+    const currentSpineWidth = isSinglePage ? 0 : 16;
+    let resolvedW = 0;
+    let resolvedH = 0;
 
     if (isSinglePage) {
-      return {
-        aspectRatio: `${dimensions.width} / ${dimensions.height}`,
-        maxHeight: "calc(100vh - 200px)",
-        maxWidth: "92vw",
-        width: "auto",
-        height: "auto",
-      };
+      // Single page aspect ratio constraint
+      const testH = maxBookH;
+      const testW = testH * aspectRatio;
+      if (testW <= maxBookW) {
+        resolvedW = testW;
+        resolvedH = testH;
+      } else {
+        resolvedW = maxBookW;
+        resolvedH = resolvedW / aspectRatio;
+      }
+    } else {
+      // Double spread aspect ratio constraint (width of one page)
+      const maxAvailableW = maxBookW - currentSpineWidth;
+      const testH = maxBookH;
+      const testW = testH * aspectRatio;
+      if (testW * 2 <= maxAvailableW) {
+        resolvedW = testW;
+        resolvedH = testH;
+      } else {
+        resolvedW = maxAvailableW / 2;
+        resolvedH = resolvedW / aspectRatio;
+      }
     }
 
-    // Double spread: width is doubled
+    // Round to avoid pixel rendering sub-pixel glitches
+    resolvedW = Math.round(resolvedW);
+    resolvedH = Math.round(resolvedH);
+
     return {
       aspectRatio: `${dimensions.width} / ${dimensions.height}`,
-      maxHeight: "calc(100vh - 220px)",
-      maxWidth: aspectRatio > 1.2 ? "45vw" : "36vw",
-      width: "auto",
-      height: "auto",
+      width: `${resolvedW}px`,
+      height: `${resolvedH}px`,
+      maxWidth: "unset",
+      maxHeight: "unset",
     };
-  }, [dimensions, isSinglePage]);
+  }, [dimensions, isSinglePage, containerSize, maxHeight]);
+
+  const spineWidth = isSinglePage ? 0 : 16;
+
+  const bookDimensions = useMemo(() => {
+    const pw = parseInt(pageStyle.width, 10) || 0;
+    const ph = parseInt(pageStyle.height, 10) || 0;
+    const bookWidth = isSinglePage ? pw : pw * 2 + spineWidth;
+    return {
+      width: `${bookWidth}px`,
+      height: `${ph}px`,
+      pageWidth: pw,
+      pageHeight: ph,
+    };
+  }, [pageStyle, isSinglePage, spineWidth]);
 
   // ─── Image Rendering block ────────────────────────────────────────────────
 
@@ -326,7 +392,7 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
               />
             )}
             <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-transparent to-slate-950/90 z-0 pointer-events-none" />
-            
+
             <div className="relative z-10 space-y-2 pt-4 pointer-events-none">
               <div className="h-8 w-8 mx-auto rounded-full bg-sky-500/10 flex items-center justify-center">
                 <svg
@@ -448,7 +514,12 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
   return (
     <div
       className="book-engine"
-      ref={containerRef}
+      ref={(node) => {
+        localContainerRef.current = node;
+        if (containerRef) {
+          (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+        }
+      }}
       role="region"
       aria-label="Album viewer"
       aria-roledescription="flipbook"
@@ -457,12 +528,27 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
       <div
         ref={bookWrapperRef}
         className={`book-wrapper ${isSinglePage ? "book-wrapper--single" : ""}`}
+        style={{
+          width: bookDimensions.width,
+          height: bookDimensions.height,
+        }}
       >
         <div className="book-shadow" />
 
-        {!isSinglePage && !isBookClosed && <div className="book-spine" />}
+        {!isSinglePage && !isBookClosed && (
+          <div
+            className="book-spine"
+            style={{ left: `${bookDimensions.pageWidth + spineWidth / 2}px` }}
+          />
+        )}
 
-        <div className="book-pages">
+        <div
+          className="book-pages"
+          style={{
+            width: bookDimensions.width,
+            height: bookDimensions.height,
+          }}
+        >
           {leaves.map((leaf, index) => {
             const isLeft = index < currentLeaf;
             const isRight = index > currentLeaf;
@@ -485,12 +571,16 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
 
             // Calculate rotation style based on leaf position
             let rotateAngle = 0;
-            if (isLeft) {
-              rotateAngle = -180;
-            } else if (isRight) {
-              rotateAngle = 0;
-            } else if (isActive) {
-              rotateAngle = 0;
+            if (isSinglePage) {
+              rotateAngle = (index < currentLeaf || (index === currentLeaf && currentPage % 2 !== 0)) ? -180 : 0;
+            } else {
+              if (isLeft) {
+                rotateAngle = -180;
+              } else if (isRight) {
+                rotateAngle = 0;
+              } else if (isActive) {
+                rotateAngle = 0;
+              }
             }
 
             // Override angle if this leaf is animating
@@ -514,6 +604,8 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
             }
 
             const dragOverride = getDragStyle(index);
+            const leafLeft = isSinglePage ? 0 : bookDimensions.pageWidth + spineWidth;
+            const leafOrigin = isSinglePage ? "center center" : `-${spineWidth / 2}px center`;
 
             return (
               <div
@@ -522,9 +614,11 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
                 style={{
                   ...pageStyle,
                   zIndex,
-                  transformOrigin: "left center",
-                  position: index === 0 ? "relative" : "absolute",
-                  left: index === 0 ? 0 : "auto",
+                  transformOrigin: leafOrigin,
+                  position: "absolute",
+                  left: `${leafLeft}px`,
+                  top: 0,
+                  display: isSinglePage && !isActive && !isLeafAnimating ? "none" : undefined,
                   transform: `rotateY(${rotateAngle}deg)`,
                   transition: isLeafAnimating ? `transform ${flipDuration}ms cubic-bezier(0.645, 0.045, 0.355, 1)` : undefined,
                   transformStyle: "preserve-3d",
