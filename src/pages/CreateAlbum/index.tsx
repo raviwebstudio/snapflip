@@ -15,6 +15,7 @@ interface UploadedFile {
   name: string;
   width?: number;
   height?: number;
+  orientation?: number;
 }
 
 const detailsFallback = {
@@ -207,7 +208,7 @@ export default function CreateAlbum() {
   }, [editingAlbumId, details, files, coverImage, settings, albumStatus]);
 
   // Execute database save/autosave updates
-  const performAutosaveUpdate = () => {
+  const performAutosaveUpdate = async () => {
     const current = saveRef.current;
     if (!current.editingAlbumId) return;
 
@@ -215,7 +216,7 @@ export default function CreateAlbum() {
     const detected = isAuto ? detectDominantSize(current.files) : undefined;
 
     try {
-      DbService.updateAlbum(current.editingAlbumId, {
+      await DbService.updateAlbum(current.editingAlbumId, {
         name: current.details.albumName || "Untitled Collection",
         coupleName: current.details.coupleName || "Event",
         eventType: current.details.eventType || "editorial",
@@ -261,7 +262,7 @@ export default function CreateAlbum() {
     };
   }, []);
 
-  const handleSaveDraft = () => {
+  const handleSaveDraft = async () => {
     try {
       const isAuto = details.albumSize === "auto";
       const detected = isAuto ? detectDominantSize(files) : undefined;
@@ -285,10 +286,10 @@ export default function CreateAlbum() {
       };
 
       if (editingAlbumId) {
-        DbService.updateAlbum(editingAlbumId, payload);
+        await DbService.updateAlbum(editingAlbumId, payload);
         addToast("Collection draft updated successfully!", "success");
       } else {
-        DbService.createAlbum(payload);
+        await DbService.createAlbum(payload);
         addToast("Collection draft saved successfully!", "success");
       }
 
@@ -304,7 +305,7 @@ export default function CreateAlbum() {
     }
   };
 
-  const handlePublish = () => {
+  const handlePublish = async () => {
     try {
       const isAuto = details.albumSize === "auto";
       const detected = isAuto ? detectDominantSize(files) : undefined;
@@ -328,10 +329,10 @@ export default function CreateAlbum() {
       };
 
       if (editingAlbumId) {
-        DbService.updateAlbum(editingAlbumId, payload);
+        await DbService.updateAlbum(editingAlbumId, payload);
         addToast("Collection published successfully!", "success");
       } else {
-        DbService.createAlbum(payload);
+        await DbService.createAlbum(payload);
         addToast("Collection published successfully!", "success");
       }
 

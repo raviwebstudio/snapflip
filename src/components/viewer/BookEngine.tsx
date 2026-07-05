@@ -13,6 +13,7 @@ interface BookPhoto {
   height?: number;
   thumbnailUrl?: string;
   optimizedUrl?: string;
+  orientation?: number;
 }
 
 export interface BookEngineRef {
@@ -395,21 +396,12 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
     };
   }, [pageStyle, isSinglePage, spineWidth]);
 
-  const wrapperTransform = useMemo(() => {
-    if (isSinglePage) return undefined;
-    if (currentPage === 0) {
-      return `translateX(-${(bookDimensions.pageWidth + spineWidth) / 2}px)`;
-    }
-    if (currentPage >= totalPages - 1) {
-      return `translateX(${(bookDimensions.pageWidth + spineWidth) / 2}px)`;
-    }
-    return "translateX(0px)";
-  }, [isSinglePage, currentPage, totalPages, bookDimensions.pageWidth, spineWidth]);
+
 
   // ─── Image Rendering block ────────────────────────────────────────────────
 
   const renderPageContent = useCallback(
-    (page: BookPage, side: "left" | "right") => {
+    (page: BookPage, side: "left" | "right", eager: boolean) => {
       if (page.type === "cover") {
         return (
           <div className="absolute inset-0 flex flex-col justify-between p-6 sm:p-8 text-center bg-slate-950 select-none">
@@ -418,7 +410,7 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
                 src={coverImage}
                 alt="Cover"
                 className="absolute inset-0 h-full w-full object-cover opacity-40 pointer-events-none"
-                loading="lazy"
+                loading={eager ? "eager" : "lazy"}
                 draggable={false}
               />
             )}
@@ -516,14 +508,17 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
 
       // Use optimized URL if present for rendering inside the book spread to save memory
       const renderSrc = photo.optimizedUrl || photo.url;
+      const rotation = photo.orientation || 0;
+      const rotationStyle = rotation ? { transform: `rotate(${rotation}deg)` } : undefined;
 
       return (
         <div className={`book-page-image-wrapper ${side === "left" ? "book-page-content--left" : "book-page-content--right"}`}>
           <img
             src={renderSrc}
             alt={photo.name}
+            style={rotationStyle}
             className="book-page-image"
-            loading="lazy"
+            loading={eager ? "eager" : "lazy"}
             draggable={false}
           />
           {watermark && (
@@ -562,7 +557,6 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
         style={{
           width: bookDimensions.width,
           height: bookDimensions.height,
-          transform: wrapperTransform,
         }}
       >
         <div className="book-shadow" />
@@ -671,7 +665,7 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
                     overflow: "hidden",
                   }}
                 >
-                  {renderPageContent(leaf.front, "right")}
+                  {renderPageContent(leaf.front, "right", Math.abs(index - currentLeaf) <= 1)}
                 </div>
 
                 {/* Back Side of sheet (Visible when rotated between -90 and -180 deg) */}
@@ -688,7 +682,7 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
                     overflow: "hidden",
                   }}
                 >
-                  {renderPageContent(leaf.back, "left")}
+                  {renderPageContent(leaf.back, "left", Math.abs(index - currentLeaf) <= 1)}
                 </div>
 
                 {/* Corner hints */}

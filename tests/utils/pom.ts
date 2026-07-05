@@ -151,8 +151,8 @@ export class SettingsPage {
 
   constructor(page: Page) {
     this.page = page;
-    this.studioNameInput = page.locator('div:has(label:has-text("Studio / Business Name")) input').first();
-    this.notificationsToggle = page.locator('button:has-text("Email Alerts")').first();
+    this.studioNameInput = page.locator('div:has(> label:has-text("Studio / Business Name")) > input').first();
+    this.notificationsToggle = page.locator('div:has(h4:has-text("Email Alerts")) > button').first();
     this.saveBtn = page.locator('button:has-text("Save Changes")').first();
     this.resetBtn = page.locator('button:has-text("Reset Settings")').first();
   }

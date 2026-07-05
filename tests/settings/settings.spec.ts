@@ -17,8 +17,8 @@ test.describe('Settings Page E2E Suite', () => {
     await expect(settings.resetBtn).toBeVisible();
 
     // Verify storage metrics card
-    await expect(page.locator('text=Workspace Storage')).toBeVisible();
-    await expect(page.locator('text=Reset to Default')).not.toBeVisible();
+    await expect(page.locator('text=Storage Information')).toBeVisible();
+    await expect(page.locator('text=Staged Space Occupied')).toBeVisible();
   });
 
   test('should validate saving settings updates', async ({ page }) => {
@@ -33,9 +33,9 @@ test.describe('Settings Page E2E Suite', () => {
     }
 
     // Fill out the required profile fields to avoid browser native validation blocks
-    await page.locator('label:has-text("Full Name") + input').fill('John Doe');
-    await page.locator('label:has-text("Email Address") + input').fill('john@aurastudios.com');
-    await page.locator('label:has-text("Phone Number") + input').fill('+1 (555) 234-5678');
+    await page.locator('div:has(> label:has-text("Full Name")) > input').fill('John Doe');
+    await page.locator('div:has(> label:has-text("Email Address")) > input').fill('john@aurastudios.com');
+    await page.locator('div:has(> label:has-text("Phone Number")) > input').fill('+1 (555) 234-5678');
 
     await settings.saveBtn.click();
 

@@ -286,7 +286,9 @@ function dataURLtoBlob(dataurl: string): Blob {
   return new Blob([u8arr], { type: mime });
 }
 
-function processAlbumBinaries(album: Album): void {
+async function processAlbumBinaries(album: Album): Promise<void> {
+  const promises: Promise<void>[] = [];
+
   // 1. Process coverImage
   if (album.coverImage && album.coverImage.startsWith("data:image/")) {
     try {
@@ -294,7 +296,8 @@ function processAlbumBinaries(album: Album): void {
       const key = `${album.id}_cover`;
       const url = URL.createObjectURL(blob);
       localBlobUrls.set(key, url);
-      saveBinary(key, blob).catch((err) => console.error("Failed to save cover image binary:", err));
+      const p = saveBinary(key, blob).catch((err) => console.error("Failed to save cover image binary:", err));
+      promises.push(p);
       album.coverImage = `binary:${album.id}_cover`;
     } catch (e) {
       console.error("Failed to convert cover image Base64 to Blob:", e);
@@ -302,10 +305,11 @@ function processAlbumBinaries(album: Album): void {
   } else if (album.coverImage && album.coverImage.startsWith("blob:")) {
     const key = `${album.id}_cover`;
     localBlobUrls.set(key, album.coverImage);
-    fetch(album.coverImage)
+    const p = fetch(album.coverImage)
       .then((r) => r.blob())
       .then((blob) => saveBinary(key, blob))
       .catch((e) => console.error("Failed to persist cover image blob:", e));
+    promises.push(p);
     album.coverImage = `binary:${album.id}_cover`;
   }
 
@@ -318,7 +322,8 @@ function processAlbumBinaries(album: Album): void {
         const key = `${photo.id}_url`;
         const url = URL.createObjectURL(blob);
         localBlobUrls.set(key, url);
-        saveBinary(key, blob).catch((err) => console.error("Failed to save photo URL binary:", err));
+        const p = saveBinary(key, blob).catch((err) => console.error("Failed to save photo URL binary:", err));
+        promises.push(p);
         photo.url = `binary:${photo.id}_url`;
       } catch (e) {
         console.error("Failed to convert photo URL Base64 to Blob:", e);
@@ -326,10 +331,11 @@ function processAlbumBinaries(album: Album): void {
     } else if (photo.url && photo.url.startsWith("blob:")) {
       const key = `${photo.id}_url`;
       localBlobUrls.set(key, photo.url);
-      fetch(photo.url)
+      const p = fetch(photo.url)
         .then((r) => r.blob())
         .then((blob) => saveBinary(key, blob))
         .catch((e) => console.error("Failed to persist photo URL blob:", e));
+      promises.push(p);
       photo.url = `binary:${photo.id}_url`;
     }
 
@@ -340,7 +346,8 @@ function processAlbumBinaries(album: Album): void {
         const key = `${photo.id}_opt`;
         const url = URL.createObjectURL(blob);
         localBlobUrls.set(key, url);
-        saveBinary(key, blob).catch((err) => console.error("Failed to save optimized URL binary:", err));
+        const p = saveBinary(key, blob).catch((err) => console.error("Failed to save optimized URL binary:", err));
+        promises.push(p);
         photo.optimizedUrl = `binary:${photo.id}_opt`;
       } catch (e) {
         console.error("Failed to convert optimized URL Base64 to Blob:", e);
@@ -348,13 +355,16 @@ function processAlbumBinaries(album: Album): void {
     } else if (photo.optimizedUrl && photo.optimizedUrl.startsWith("blob:")) {
       const key = `${photo.id}_opt`;
       localBlobUrls.set(key, photo.optimizedUrl);
-      fetch(photo.optimizedUrl)
+      const p = fetch(photo.optimizedUrl)
         .then((r) => r.blob())
         .then((blob) => saveBinary(key, blob))
         .catch((e) => console.error("Failed to persist optimized URL blob:", e));
+      promises.push(p);
       photo.optimizedUrl = `binary:${photo.id}_opt`;
     }
   });
+
+  await Promise.all(promises);
 }
 
 export class DbService {
@@ -452,7 +462,7 @@ export class DbService {
   /**
    * Create or save a new album item.
    */
-  public static createAlbum(album: Omit<Album, "id" | "updated" | "gradient">): Album {
+  public static async createAlbum(album: Omit<Album, "id" | "updated" | "gradient">): Promise<Album> {
     const albums = this.getAlbums();
     const gradients = [
       "from-[#0b3037] to-slate-900",
@@ -467,7 +477,7 @@ export class DbService {
       gradient: gradients[albums.length % gradients.length]
     };
     
-    processAlbumBinaries(newAlbum);
+    await processAlbumBinaries(newAlbum);
     
     albums.unshift(newAlbum);
     this.saveAlbums(albums);
@@ -497,7 +507,7 @@ export class DbService {
   /**
    * Update fields of an existing album.
    */
-  public static updateAlbum(id: string, fields: Partial<Album>): Album {
+  public static async updateAlbum(id: string, fields: Partial<Album>): Promise<Album> {
     const albums = this.getAlbums();
     const index = albums.findIndex((a) => a.id === id);
     if (index === -1) {
@@ -510,7 +520,7 @@ export class DbService {
       id,
     };
     
-    processAlbumBinaries(targetAlbum);
+    await processAlbumBinaries(targetAlbum);
     
     const updatedAlbum = {
       ...targetAlbum,

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Move,
   Trash,
@@ -19,6 +19,7 @@ interface UploadedFile {
   name: string;
   thumbnailUrl?: string;
   optimizedUrl?: string;
+  orientation?: number;
 }
 
 interface StepOrganizerProps {
@@ -38,7 +39,15 @@ export default function StepOrganizer({
   onNext,
   onBack,
 }: StepOrganizerProps) {
-  const [rotationMap, setRotationMap] = useState<Record<string, number>>({});
+  const [rotationMap, setRotationMap] = useState<Record<string, number>>(() => {
+    const map: Record<string, number> = {};
+    files.forEach((f) => {
+      if (f.orientation !== undefined) {
+        map[f.id] = f.orientation;
+      }
+    });
+    return map;
+  });
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -55,9 +64,27 @@ export default function StepOrganizer({
   });
 
   // Set first uploaded photo as cover if none set
-  if (files.length > 0 && !coverImage) {
-    onCoverImageChange(files[0].url);
-  }
+  useEffect(() => {
+    if (files.length > 0 && !coverImage) {
+      onCoverImageChange(files[0].url);
+    }
+  }, [files, coverImage, onCoverImageChange]);
+
+  // Synchronize rotationMap from files prop
+  useEffect(() => {
+    setRotationMap((prev) => {
+      const map = { ...prev };
+      let changed = false;
+      files.forEach((f) => {
+        const fileOrientation = f.orientation || 0;
+        if (map[f.id] !== fileOrientation) {
+          map[f.id] = fileOrientation;
+          changed = true;
+        }
+      });
+      return changed ? map : prev;
+    });
+  }, [files]);
 
   // Native Drag and Drop handlers
   const handleDragStart = (index: number) => {
@@ -82,18 +109,34 @@ export default function StepOrganizer({
 
   const handleRotateRight = (id: string) => {
     const currentRotate = rotationMap[id] || 0;
-    setRotationMap({
-      ...rotationMap,
-      [id]: (currentRotate + 90) % 360,
+    const newRotate = (currentRotate + 90) % 360;
+    setRotationMap((prev) => ({
+      ...prev,
+      [id]: newRotate,
+    }));
+    const updated = files.map((f) => {
+      if (f.id === id) {
+        return { ...f, orientation: newRotate };
+      }
+      return f;
     });
+    onFilesChange(updated);
   };
 
   const handleRotateLeft = (id: string) => {
     const currentRotate = rotationMap[id] || 0;
-    setRotationMap({
-      ...rotationMap,
-      [id]: (currentRotate - 90 + 360) % 360,
+    const newRotate = (currentRotate - 90 + 360) % 360;
+    setRotationMap((prev) => ({
+      ...prev,
+      [id]: newRotate,
+    }));
+    const updated = files.map((f) => {
+      if (f.id === id) {
+        return { ...f, orientation: newRotate };
+      }
+      return f;
     });
+    onFilesChange(updated);
   };
 
   const handleDelete = (id: string) => {
