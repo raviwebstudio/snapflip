@@ -18,6 +18,7 @@ interface BookPhoto {
 export interface BookEngineRef {
   flipNext: () => void;
   flipPrev: () => void;
+  reset: () => void;
 }
 
 interface BookEngineProps {
@@ -36,6 +37,8 @@ interface BookEngineProps {
   onPageChange?: (pageIndex: number) => void;
   onOrientationChange?: (orientation: "portrait" | "landscape") => void;
   onInteraction?: () => void;
+  autoPlay?: boolean;
+  autoPlayInterval?: number;
 }
 
 // ─── Leaf-based Page Types ────────────────────────────────────────────────────
@@ -71,6 +74,8 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
   onPageChange,
   onOrientationChange,
   onInteraction,
+  autoPlay,
+  autoPlayInterval,
 }, ref) => {
   const [currentPage, setCurrentPage] = useState(0);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -218,6 +223,20 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
     }, flipDuration);
   }, [isAnimating, currentLeaf, totalLeaves, totalPages, isSinglePage, currentPage, flipDuration]);
 
+  useEffect(() => {
+    if (!autoPlay) return;
+
+    const interval = setInterval(() => {
+      if (currentPage >= totalPages - 1) {
+        setCurrentPage(0);
+      } else {
+        handleFlipForward();
+      }
+    }, autoPlayInterval || 6000);
+
+    return () => clearInterval(interval);
+  }, [autoPlay, autoPlayInterval, currentPage, totalPages, handleFlipForward]);
+
   const handleFlipBackward = useCallback(() => {
     if (isAnimating) return;
 
@@ -254,6 +273,7 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
   useImperativeHandle(ref, () => ({
     flipNext: handleFlipForward,
     flipPrev: handleFlipBackward,
+    reset: () => setCurrentPage(0),
   }));
 
   // ─── Interaction Hook ──────────────────────────────────────────────────────
@@ -374,6 +394,17 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
       pageHeight: ph,
     };
   }, [pageStyle, isSinglePage, spineWidth]);
+
+  const wrapperTransform = useMemo(() => {
+    if (isSinglePage) return undefined;
+    if (currentPage === 0) {
+      return `translateX(-${(bookDimensions.pageWidth + spineWidth) / 2}px)`;
+    }
+    if (currentPage >= totalPages - 1) {
+      return `translateX(${(bookDimensions.pageWidth + spineWidth) / 2}px)`;
+    }
+    return "translateX(0px)";
+  }, [isSinglePage, currentPage, totalPages, bookDimensions.pageWidth, spineWidth]);
 
   // ─── Image Rendering block ────────────────────────────────────────────────
 
@@ -531,6 +562,7 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>(({
         style={{
           width: bookDimensions.width,
           height: bookDimensions.height,
+          transform: wrapperTransform,
         }}
       >
         <div className="book-shadow" />

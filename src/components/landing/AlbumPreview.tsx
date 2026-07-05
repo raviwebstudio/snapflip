@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useRef, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Play, Pause, Maximize2, RotateCcw } from "lucide-react";
 import BookEngine, { type BookEngineRef } from "../viewer/BookEngine";
@@ -57,28 +57,10 @@ export default function AlbumPreview() {
   const [currentPage, setCurrentPage] = useState(0);
   const [isAutoplayActive, setIsAutoplayActive] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
-  const [engineKey, setEngineKey] = useState(0); // Reset helper
 
   const totalPhotos = demoAlbum.photos.length;
   const hasFillerPage = (totalPhotos + 2) % 2 !== 0;
   const totalPages = totalPhotos + 2 + (hasFillerPage ? 1 : 0);
-
-  // Auto Slideshow Effect (6 seconds interval)
-  useEffect(() => {
-    if (!isAutoplayActive || isHovered) return;
-
-    const interval = setInterval(() => {
-      if (currentPage >= totalPages - 1) {
-        // Reset book back to cover page cleanly
-        setEngineKey((prev) => prev + 1);
-        setCurrentPage(0);
-      } else {
-        bookEngineRef.current?.flipNext();
-      }
-    }, 6000);
-
-    return () => clearInterval(interval);
-  }, [isAutoplayActive, isHovered, currentPage, totalPages]);
 
   // Disable autoplay immediately upon manual swipe/drag/click interaction
   const handleManualInteraction = () => {
@@ -154,7 +136,6 @@ export default function AlbumPreview() {
             style={{ height: "420px" }}
           >
             <BookEngine
-              key={engineKey}
               ref={bookEngineRef}
               photos={demoAlbum.photos}
               albumSize="auto"
@@ -166,6 +147,7 @@ export default function AlbumPreview() {
               maxHeight="380px"
               onPageChange={handlePageChange}
               onInteraction={handleManualInteraction}
+              autoPlay={isAutoplayActive && !isHovered}
             />
           </div>
 
@@ -227,8 +209,7 @@ export default function AlbumPreview() {
             {currentPage >= totalPages - 1 && (
               <button
                 onClick={() => {
-                  setEngineKey((prev) => prev + 1);
-                  setCurrentPage(0);
+                  bookEngineRef.current?.reset();
                   setIsAutoplayActive(true);
                 }}
                 className="inline-flex h-9 px-3 items-center justify-center gap-1.5 rounded-xl border border-slate-850 bg-slate-900/65 text-[10px] font-bold uppercase tracking-wider text-sky-400 hover:text-sky-350 transition-colors cursor-pointer"

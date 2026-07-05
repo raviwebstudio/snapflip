@@ -7,7 +7,9 @@ import {
   ArrowRight,
   Download,
   Info,
-  AlertTriangle
+  AlertTriangle,
+  Play,
+  Pause
 } from "lucide-react";
 import { DbService } from "../../services/dbService";
 import type { Album } from "../../services/dbService";
@@ -84,6 +86,11 @@ function Viewer() {
   const [orientation, setOrientation] = useState<"portrait" | "landscape">("landscape");
   const [isPlayingMusic, setIsPlayingMusic] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [isAutoplayActive, setIsAutoplayActive] = useState(false);
+
+  const handleManualInteraction = useCallback(() => {
+    setIsAutoplayActive(false);
+  }, []);
 
   const bookEngineRef = useRef<BookEngineRef>(null);
   const infoPanelRef = useRef<HTMLDivElement>(null);
@@ -278,6 +285,27 @@ function Viewer() {
             <Info className="h-4 w-4" />
           </button>
 
+          {/* Autoplay / Slideshow Toggle */}
+          <button
+            onClick={() => setIsAutoplayActive(!isAutoplayActive)}
+            className={`h-9 px-2.5 rounded-lg border flex items-center justify-center gap-1.5 transition-colors cursor-pointer border-slate-800 text-slate-400 hover:text-white ${
+              isAutoplayActive ? "bg-sky-500/10 text-sky-400 border-sky-500/30" : ""
+            }`}
+            title="Toggle Slideshow Autoplay"
+          >
+            {isAutoplayActive ? (
+              <>
+                <Pause className="h-4 w-4 text-sky-450 animate-pulse" />
+                <span className="text-[10px] font-mono uppercase tracking-wider hidden sm:inline">Playing</span>
+              </>
+            ) : (
+              <>
+                <Play className="h-4 w-4" />
+                <span className="text-[10px] font-mono uppercase tracking-wider hidden sm:inline">Slideshow</span>
+              </>
+            )}
+          </button>
+
           {/* Background Music Toggle */}
           {album.settings?.music && album.settings?.music !== "none" && (
             <button
@@ -359,6 +387,8 @@ function Viewer() {
               coverImage={album.coverImage}
               onPageChange={handlePageChange}
               onOrientationChange={handleOrientationChange}
+              autoPlay={isAutoplayActive}
+              onInteraction={handleManualInteraction}
             />
           </div>
 

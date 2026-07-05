@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect } from "react";
+import { useRef, useCallback, useEffect, useState } from "react";
 
 /**
  * Pointer interaction state used during drag gestures.
@@ -77,9 +77,9 @@ export function useBookInteraction({
   // We use a state-update trigger to re-render when drag progress changes
   // but throttle it to animation frames for 60fps
   const rafRef = useRef<number | null>(null);
-  const forceUpdateRef = useRef(0);
+  const [tick, setTick] = useState(0);
   const forceUpdate = useCallback(() => {
-    forceUpdateRef.current += 1;
+    setTick((t) => t + 1);
   }, []);
 
   // Minimum drag distance in pixels to trigger a page flip
@@ -273,7 +273,7 @@ export function useBookInteraction({
   }, []);
 
   // Force a render cycle to read refs (the void usage prevents unused-var lint)
-  void forceUpdateRef.current;
+  void tick;
 
   return {
     containerRef,
