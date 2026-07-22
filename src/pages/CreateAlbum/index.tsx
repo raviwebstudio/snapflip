@@ -8,6 +8,7 @@ import StepReview from "../../components/album/StepReview";
 import { Check, CheckCircle2, RotateCcw } from "lucide-react";
 import { DbService } from "../../services/dbService";
 import { useToastStore } from "../../store";
+import { detectRecommendedSize } from "../../utils/albumUtils";
 
 interface UploadedFile {
   id: string;
@@ -61,51 +62,57 @@ export default function CreateAlbum() {
   // 1. Initial State Loader: Listen for ?id=xxx
   useEffect(() => {
     if (queryId) {
-      const existing = DbService.getAlbumById(queryId);
-      if (existing) {
-        setEditingAlbumId(queryId);
-        setAlbumStatus(existing.status);
-        const s = existing.settings;
-        setDetails({
-          albumName: existing.name || "",
-          coupleName: existing.coupleName || "",
-          eventType: existing.eventType || "",
-          eventDate: existing.eventDate || "",
-          albumSize: s?.albumSize ?? "auto",
-          customWidth: s?.customWidth ?? "",
-          customHeight: s?.customHeight ?? "",
-          customUnit: s?.customUnit ?? "mm",
-        });
-        setFiles(existing.photos || []);
-        setCoverImage(existing.coverImage || "");
-        setSettings({
-          title: s?.title ?? "",
-          description: s?.description ?? "",
-          theme: s?.theme ?? "dark-luxury",
-          music: s?.music ?? "none",
-          visibility: s?.visibility ?? "Public",
-          passcode: s?.passcode ?? "",
-          watermark: s?.watermark ?? false,
-          allowDownload: s?.allowDownload ?? true,
-        });
+      if (editingAlbumId === queryId) {
+        return;
+      }
+      DbService.getAlbumById(queryId).then((existing) => {
+        if (existing) {
+          setEditingAlbumId(queryId);
+          setAlbumStatus(existing.status);
+          const s = existing.settings;
+          setDetails({
+            albumName: existing.name || "",
+            coupleName: existing.coupleName || "",
+            eventType: existing.eventType || "",
+            eventDate: existing.eventDate || "",
+            albumSize: s?.albumSize ?? "auto",
+            customWidth: s?.customWidth ?? "",
+            customHeight: s?.customHeight ?? "",
+            customUnit: s?.customUnit ?? "mm",
+          });
+          setFiles(existing.photos || []);
+          setCoverImage(existing.coverImage || "");
+          setSettings({
+            title: s?.title ?? "",
+            description: s?.description ?? "",
+            theme: s?.theme ?? "dark-luxury",
+            music: s?.music ?? "none",
+            visibility: s?.visibility ?? "Public",
+            passcode: s?.passcode ?? "",
+            watermark: s?.watermark ?? false,
+            allowDownload: s?.allowDownload ?? true,
+          });
 
-        // Restore step if there is matching session editing cache
-        const savedStateStr = localStorage.getItem("snapflip_create_album_state");
-        if (savedStateStr) {
-          try {
-            const saved = JSON.parse(savedStateStr);
-            if (saved.editingId === queryId) {
-              setStep(saved.step || 1);
-            } else {
+          // Restore step if matching session editing cache
+          const savedStateStr = localStorage.getItem("snapflip_create_album_state");
+          if (savedStateStr) {
+            try {
+              const saved = JSON.parse(savedStateStr);
+              if (saved.editingId === queryId) {
+                setStep(saved.step || 1);
+              } else {
+                setStep(1);
+              }
+            } catch {
               setStep(1);
             }
-          } catch {
+          } else {
             setStep(1);
           }
-        } else {
-          setStep(1);
         }
-      }
+      }).catch((err) => {
+        console.error("Failed to load album in creator:", err);
+      });
     } else {
       setEditingAlbumId(null);
       setAlbumStatus("Draft");
@@ -168,52 +175,57 @@ export default function CreateAlbum() {
     setDetails((prev) => ({ ...prev, ...fields }));
   };
 
+  const handleDetailsNext = async () => {
+    if (!editingAlbumId) {
+      try {
+        const payload = {
+          name: details.albumName || "Untitled Collection",
+          coupleName: details.coupleName || "Event",
+          eventType: details.eventType || "editorial",
+          eventDate: details.eventDate || new Date().toISOString().split("T")[0],
+          photos: [],
+          coverImage: "",
+          settings: {
+            ...settings,
+            albumSize: details.albumSize,
+            title: details.albumName || "Untitled Collection",
+          },
+          status: "Draft" as const,
+        };
+        const created = await DbService.createAlbum(payload);
+        setEditingAlbumId(created.id);
+        navigate(`/create?id=${created.id}`, { replace: true });
+      } catch (err) {
+        console.error("Failed to auto-create draft on Step 1 Next:", err);
+      }
+    }
+    setStep(2);
+  };
+
   const handleSettingsChange = (fields: Partial<typeof settings>) => {
     setSettings((prev) => ({ ...prev, ...fields }));
   };
 
-  const detectDominantSize = (albumFiles: UploadedFile[]): string => {
-    if (albumFiles.length === 0) return "Landscape";
-    
-    let portraitCount = 0;
-    let landscapeCount = 0;
-    let squareCount = 0;
-
-    albumFiles.forEach((file) => {
-      const w = file.width || 800;
-      const h = file.height || 600;
-      const ratio = w / h;
-      if (ratio > 1.2) {
-        landscapeCount++;
-      } else if (ratio < 0.8) {
-        portraitCount++;
-      } else {
-        squareCount++;
-      }
-    });
-
-    if (landscapeCount >= portraitCount && landscapeCount >= squareCount) {
-      return "Landscape";
-    }
-    if (portraitCount >= landscapeCount && portraitCount >= squareCount) {
-      return "Portrait";
-    }
-    return "Square";
+  const detectDominantSize = (albumFiles: UploadedFile[], currentCover?: string): "Portrait" | "Landscape" | "Square" => {
+    const res = detectRecommendedSize(albumFiles, currentCover || coverImage);
+    return res.recommended;
   };
 
   // Autosave / Save-on-Exit Lifecycle Hook (P5-014)
-  const saveRef = useRef({ editingAlbumId, details, files, coverImage, settings, albumStatus });
+  const skipAutosaveRef = useRef(false);
+  const saveRef = useRef({ step, editingAlbumId, details, files, coverImage, settings, albumStatus });
   useEffect(() => {
-    saveRef.current = { editingAlbumId, details, files, coverImage, settings, albumStatus };
-  }, [editingAlbumId, details, files, coverImage, settings, albumStatus]);
+    saveRef.current = { step, editingAlbumId, details, files, coverImage, settings, albumStatus };
+  }, [step, editingAlbumId, details, files, coverImage, settings, albumStatus]);
 
   // Execute database save/autosave updates
   const performAutosaveUpdate = async () => {
+    if (skipAutosaveRef.current) return;
     const current = saveRef.current;
     if (!current.editingAlbumId) return;
 
     const isAuto = current.details.albumSize === "auto";
-    const detected = isAuto ? detectDominantSize(current.files) : undefined;
+    const detected = isAuto ? detectDominantSize(current.files, current.coverImage) : undefined;
 
     try {
       await DbService.updateAlbum(current.editingAlbumId, {
@@ -221,7 +233,7 @@ export default function CreateAlbum() {
         coupleName: current.details.coupleName || "Event",
         eventType: current.details.eventType || "editorial",
         eventDate: current.details.eventDate || new Date().toISOString().split("T")[0],
-        photos: current.files,
+        photos: current.step >= 3 ? current.files : undefined,
         coverImage: current.coverImage,
         settings: {
           ...current.settings,
@@ -263,9 +275,10 @@ export default function CreateAlbum() {
   }, []);
 
   const handleSaveDraft = async () => {
+    skipAutosaveRef.current = true;
     try {
       const isAuto = details.albumSize === "auto";
-      const detected = isAuto ? detectDominantSize(files) : undefined;
+      const detected = isAuto ? detectDominantSize(files, coverImage) : undefined;
 
       const payload = {
         name: details.albumName || "Untitled Collection",
@@ -285,6 +298,8 @@ export default function CreateAlbum() {
         status: "Draft" as const,
       };
 
+      setAlbumStatus("Draft");
+
       if (editingAlbumId) {
         await DbService.updateAlbum(editingAlbumId, payload);
         addToast("Collection draft updated successfully!", "success");
@@ -300,15 +315,17 @@ export default function CreateAlbum() {
         navigate("/dashboard?tab=albums");
       }, 2000);
     } catch (error: any) {
+      skipAutosaveRef.current = false;
       console.error("Save Draft Error:", error);
       addToast(`Failed to save draft: ${error.message || error}`, "error");
     }
   };
 
   const handlePublish = async () => {
+    skipAutosaveRef.current = true;
     try {
       const isAuto = details.albumSize === "auto";
-      const detected = isAuto ? detectDominantSize(files) : undefined;
+      const detected = isAuto ? detectDominantSize(files, coverImage) : undefined;
 
       const payload = {
         name: details.albumName || "Untitled Collection",
@@ -326,7 +343,11 @@ export default function CreateAlbum() {
           detectedSize: detected,
         },
         status: "Published" as const,
+        published_at: new Date().toISOString(),
       };
+
+      const isAlreadyPublished = editingAlbumId && albumStatus === "Published";
+      setAlbumStatus("Published");
 
       if (editingAlbumId) {
         await DbService.updateAlbum(editingAlbumId, payload);
@@ -336,13 +357,14 @@ export default function CreateAlbum() {
         addToast("Collection published successfully!", "success");
       }
 
-      setSuccessTitle(editingAlbumId && albumStatus === "Published" ? "Album Updated!" : "Album Published!");
+      setSuccessTitle(isAlreadyPublished ? "Album Updated!" : "Album Published!");
       setSuccessMsg(true);
       localStorage.removeItem("snapflip_create_album_state");
       setTimeout(() => {
         navigate("/dashboard?tab=albums");
       }, 2000);
     } catch (error: any) {
+      skipAutosaveRef.current = false;
       console.error("Publish Album Error:", error);
       addToast(`Failed to publish album: ${error.message || error}`, "error");
     }
@@ -475,7 +497,7 @@ export default function CreateAlbum() {
           <StepDetails
             data={details}
             onChange={handleDetailsChange}
-            onNext={() => setStep(2)}
+            onNext={handleDetailsNext}
           />
         )}
 
@@ -485,6 +507,7 @@ export default function CreateAlbum() {
             onFilesChange={setFiles}
             onNext={() => setStep(3)}
             onBack={() => setStep(1)}
+            albumId={editingAlbumId || undefined}
           />
         )}
 

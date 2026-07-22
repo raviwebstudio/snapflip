@@ -1,5 +1,5 @@
 import { ClipboardCheck, FileCheck, CheckCircle2 } from "lucide-react";
-import { ALBUM_SIZE_MAP } from "../../utils/albumUtils";
+import { ALBUM_SIZE_MAP, detectRecommendedSize } from "../../utils/albumUtils";
 
 interface UploadedFile {
   id: string;
@@ -43,30 +43,8 @@ export default function StepReview({ data, filesCount, files, coverImage, onBack
 
   const getFriendlySizeLabel = () => {
     if (!data.albumSize || data.albumSize === "auto") {
-      let portraitCount = 0;
-      let landscapeCount = 0;
-      let squareCount = 0;
-
-      files.forEach((file) => {
-        const w = file.width || 800;
-        const h = file.height || 600;
-        const ratio = w / h;
-        if (ratio > 1.2) {
-          landscapeCount++;
-        } else if (ratio < 0.8) {
-          portraitCount++;
-        } else {
-          squareCount++;
-        }
-      });
-
-      let detected = "Landscape";
-      if (portraitCount > landscapeCount && portraitCount > squareCount) {
-        detected = "Portrait";
-      } else if (squareCount > landscapeCount && squareCount > portraitCount) {
-        detected = "Square";
-      }
-      return `Auto Detected: ${detected}`;
+      const res = detectRecommendedSize(files, coverImage);
+      return `Auto Detected: ${res.recommended}`;
     }
 
     if (data.albumSize === "custom") {

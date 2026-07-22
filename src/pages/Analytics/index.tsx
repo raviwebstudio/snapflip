@@ -1,11 +1,43 @@
-import { BarChart3, Eye, Users, Clock, Share2, TrendingUp } from "lucide-react";
+import { useState, useEffect } from "react";
+import { BarChart3, Eye, Users, Clock, Share2, TrendingUp, HardDrive } from "lucide-react";
+import { supabase } from "../../lib/supabase";
 
 export default function Analytics() {
+  const [storageStats, setStorageStats] = useState({ savedMB: 0, savedPercent: 0 });
+
+  useEffect(() => {
+    async function loadStorageSaved() {
+      try {
+        const { data, error } = await supabase
+          .from("storage_files")
+          .select("original_size, optimized_size")
+          .eq("file_type", "original");
+
+        if (data && !error) {
+          let totalOrig = 0;
+          let totalOpt = 0;
+          data.forEach((row) => {
+            if (row.original_size) totalOrig += Number(row.original_size);
+            if (row.optimized_size) totalOpt += Number(row.optimized_size);
+          });
+          const savedBytes = totalOrig - totalOpt;
+          const savedMB = Math.round((savedBytes / (1024 * 1024)) * 10) / 10;
+          const savedPercent = totalOrig > 0 ? Math.round((savedBytes / totalOrig) * 100) : 0;
+          setStorageStats({ savedMB, savedPercent });
+        }
+      } catch (err) {
+        console.error("Failed to load storage saved stats:", err);
+      }
+    }
+    loadStorageSaved();
+  }, []);
+
   const stats = [
     { label: "Total Page Views", value: "1,205", change: "+12.5%", icon: Eye, color: "text-sky-400" },
     { label: "Unique Visitors", value: "482", change: "+8.3%", icon: Users, color: "text-emerald-400" },
     { label: "Avg. Viewing Time", value: "4m 32s", change: "+18.1%", icon: Clock, color: "text-purple-400" },
     { label: "Total Shares", value: "94", change: "+4.2%", icon: Share2, color: "text-amber-400" },
+    { label: "Total Storage Saved", value: `${storageStats.savedMB} MB`, change: `-${storageStats.savedPercent}% size`, icon: HardDrive, color: "text-emerald-400" },
   ];
 
   const popularAlbums = [
@@ -38,7 +70,7 @@ export default function Analytics() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-6">
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (

@@ -3,6 +3,7 @@ import Welcome from "../../components/dashboard/Welcome";
 import Stats from "../../components/dashboard/Stats";
 import RecentAlbums from "../../components/dashboard/RecentAlbums";
 import StorageActivity from "../../components/dashboard/StorageActivity";
+import TrashAlbums from "../../components/dashboard/TrashAlbums";
 
 export default function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -36,6 +37,16 @@ export default function Dashboard() {
         >
           Albums
         </button>
+        <button
+          onClick={() => handleTabChange("trash")}
+          className={`pb-4 text-xs font-bold tracking-widest uppercase transition-all border-b-2 cursor-pointer ${
+            activeTab === "trash"
+              ? "text-sky-400 border-sky-400"
+              : "text-slate-500 border-transparent hover:text-slate-300"
+          }`}
+        >
+          Trash
+        </button>
       </div>
 
       {/* Tab Content Panels */}
@@ -50,6 +61,12 @@ export default function Dashboard() {
       {activeTab === "albums" && (
         <div className="space-y-8">
           <RecentAlbums />
+        </div>
+      )}
+
+      {activeTab === "trash" && (
+        <div className="space-y-8">
+          <TrashAlbums />
         </div>
       )}
     </div>

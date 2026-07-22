@@ -11,6 +11,7 @@ import Settings from "../pages/Settings";
 import Analytics from "../pages/Analytics";
 import About from "../pages/About";
 import Contact from "../pages/Contact";
+import NotFound from "../pages/NotFound";
 
 export const router = createBrowserRouter([
   {
@@ -56,11 +57,19 @@ export const router = createBrowserRouter([
     ],
   },
   {
+    path: "/album/:slug",
+    element: <Viewer />,
+  },
+  {
     path: "/view/:slug",
     element: <Viewer />,
   },
   {
     path: "/search",
     element: <Search />,
+  },
+  {
+    path: "*",
+    element: <NotFound />,
   },
 ]);

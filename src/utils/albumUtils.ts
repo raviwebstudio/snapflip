@@ -149,59 +149,98 @@ export function getAlbumPageDimensions(
 }
 
 /**
- * Analyzes an array of photos and recommends an album size based on 
- * the dominant orientation of the uploaded images.
+ * Analyzes an array of photos and recommends an album size (Portrait, Landscape, Square)
+ * based on the dominant orientation with a 3% tolerance.
  *
- * Returns a recommendation object with the suggested size and a human-readable reason.
+ * Rules:
+ * - Aspect ratio = width / height
+ * - If 0.97 <= ratio <= 1.03, it's Square
+ * - If ratio > 1.03, it's Landscape
+ * - If ratio < 0.97, it's Portrait
+ * - If one has a strict majority (> 50% of photos), recommend it.
+ * - Otherwise (no clear majority / mixed), use the orientation of the cover image.
+ * - If no cover exists, use the first uploaded image.
  */
 export function detectRecommendedSize(
-  photos: { width?: number; height?: number }[]
-): { recommended: string; reason: string } {
+  photos: { url?: string; width?: number; height?: number; optimizedUrl?: string }[],
+  coverImage?: string
+): { recommended: "Portrait" | "Landscape" | "Square"; reason: string } {
   if (photos.length === 0) {
-    return { recommended: "a4-landscape", reason: "Default recommendation (no photos uploaded)" };
+    return { recommended: "Landscape", reason: "Default (no photos uploaded)" };
   }
 
   let portraitCount = 0;
   let landscapeCount = 0;
   let squareCount = 0;
 
-  for (const photo of photos) {
+  photos.forEach((photo) => {
     const w = photo.width || 800;
     const h = photo.height || 600;
     const ratio = w / h;
 
-    if (ratio > 1.15) {
-      landscapeCount++;
-    } else if (ratio < 0.85) {
-      portraitCount++;
-    } else {
+    if (ratio >= 0.97 && ratio <= 1.03) {
       squareCount++;
+    } else if (ratio > 1.03) {
+      landscapeCount++;
+    } else {
+      portraitCount++;
+    }
+  });
+
+  const total = photos.length;
+  const half = total / 2;
+
+  if (portraitCount > half) {
+    return {
+      recommended: "Portrait",
+      reason: `Majority Portrait (${Math.round((portraitCount / total) * 100)}%)`,
+    };
+  }
+
+  if (landscapeCount > half) {
+    return {
+      recommended: "Landscape",
+      reason: `Majority Landscape (${Math.round((landscapeCount / total) * 100)}%)`,
+    };
+  }
+
+  if (squareCount > half) {
+    return {
+      recommended: "Square",
+      reason: `Majority Square (${Math.round((squareCount / total) * 100)}%)`,
+    };
+  }
+
+  // Mixed / no clear majority (tie or sub-majority split)
+  // 1. Try cover image orientation
+  if (coverImage) {
+    const coverPhoto = photos.find(p => p.url === coverImage || p.optimizedUrl === coverImage);
+    if (coverPhoto) {
+      const w = coverPhoto.width || 800;
+      const h = coverPhoto.height || 600;
+      const ratio = w / h;
+      if (ratio >= 0.97 && ratio <= 1.03) {
+        return { recommended: "Square", reason: "Mixed layout: fallback to Square cover image" };
+      } else if (ratio > 1.03) {
+        return { recommended: "Landscape", reason: "Mixed layout: fallback to Landscape cover image" };
+      } else {
+        return { recommended: "Portrait", reason: "Mixed layout: fallback to Portrait cover image" };
+      }
     }
   }
 
-  const total = photos.length;
-  const landscapePct = Math.round((landscapeCount / total) * 100);
-  const portraitPct = Math.round((portraitCount / total) * 100);
-  const squarePct = Math.round((squareCount / total) * 100);
-
-  if (portraitCount >= landscapeCount && portraitCount >= squareCount) {
-    return {
-      recommended: "a4-portrait",
-      reason: `${portraitPct}% of photos are portrait oriented`,
-    };
+  // 2. Try first uploaded image orientation
+  const firstPhoto = photos[0];
+  const w = firstPhoto.width || 800;
+  const h = firstPhoto.height || 600;
+  const ratio = w / h;
+  if (ratio >= 0.97 && ratio <= 1.03) {
+    return { recommended: "Square", reason: "Mixed layout: fallback to Square first image" };
+  } else if (ratio > 1.03) {
+    return { recommended: "Landscape", reason: "Mixed layout: fallback to Landscape first image" };
+  } else {
+    return { recommended: "Portrait", reason: "Mixed layout: fallback to Portrait first image" };
   }
-
-  if (squareCount >= landscapeCount && squareCount >= portraitCount) {
-    return {
-      recommended: "10x10",
-      reason: `${squarePct}% of photos are square oriented`,
-    };
-  }
-
-  return {
-    recommended: "a4-landscape",
-    reason: `${landscapePct}% of photos are landscape oriented`,
-  };
 }
 
 /**
@@ -235,5 +274,6 @@ export function normalizeAlbum(album: Record<string, unknown>): Album {
     status: (album.status as Album["status"]) ?? "Draft",
     updated: (album.updated as string) ?? "Unknown",
     gradient: (album.gradient as string) ?? "from-slate-900 to-slate-950",
+    soft_delete_at: (album.soft_delete_at as string) ?? undefined,
   };
 }

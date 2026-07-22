@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { UploadCloud, Image as ImageIcon, X, Loader2, AlertTriangle } from "lucide-react";
 import { UploadService } from "../../services/uploadService";
 import { getExifOrientation, generateImageVariants } from "../../utils/imageUtils";
+import { PhotoService } from "../../services/PhotoService";
 
 interface UploadedFile {
   id: string;
@@ -19,15 +20,22 @@ interface StepUploadProps {
   onFilesChange: (files: UploadedFile[]) => void;
   onNext: () => void;
   onBack: () => void;
+  albumId?: string;
 }
 
-export default function StepUpload({ files, onFilesChange, onNext, onBack }: StepUploadProps) {
+export default function StepUpload({ files, onFilesChange, onNext, onBack, albumId }: StepUploadProps) {
   const [isDragActive, setIsDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState("");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isCancelledRef = useRef(false);
+
+  const handleCancelUpload = () => {
+    isCancelledRef.current = true;
+    setUploading(false);
+  };
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -39,150 +47,201 @@ export default function StepUpload({ files, onFilesChange, onNext, onBack }: Ste
     }
   };
 
-  const validateFile = (file: File): string | null => {
-    if (!file.type.startsWith("image/")) {
-      return `File "${file.name}" is not an image. Only image files are supported.`;
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      await handleFiles(Array.from(e.dataTransfer.files));
     }
-    if (file.size > 10 * 1024 * 1024) {
-      return `File "${file.name}" exceeds the 10MB size limit.`;
-    }
-    return null;
   };
 
-  const getImageDimensions = (file: File): Promise<{ width: number; height: number }> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.src = URL.createObjectURL(file);
-      img.onload = () => {
-        resolve({ width: img.naturalWidth, height: img.naturalHeight });
-      };
-      img.onerror = () => {
-        resolve({ width: 800, height: 600 }); // Default landscape mock fallback
-      };
-    });
+  const handleChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    if (e.target.files && e.target.files[0]) {
+      await handleFiles(Array.from(e.target.files));
+    }
   };
 
-  const handleUpload = async (fileList: FileList) => {
-    setErrorMsg(null);
+  const handleFiles = async (fileList: File[]) => {
+    console.log("StepUpload: handleFiles called with", fileList.map(f => `${f.name} (${f.type}, ${f.size}B)`));
+    const allowedExtensions = ["jpg", "jpeg", "png", "webp"];
+    const allowedMimes = ["image/jpeg", "image/png", "image/webp"];
+
     const validFiles: File[] = [];
-    let validationError: string | null = null;
-
-    for (let i = 0; i < fileList.length; i++) {
-      const file = fileList[i];
-      const err = validateFile(file);
-      if (err) {
-        validationError = err;
-      } else {
-        validFiles.push(file);
+    for (const f of fileList) {
+      const ext = f.name.split(".").pop()?.toLowerCase() || "";
+      if (!allowedExtensions.includes(ext) || !allowedMimes.includes(f.type)) {
+        const msg = `Upload failed: File "${f.name}" has an invalid extension (${ext}) or format (${f.type}). Only jpg, jpeg, png, and webp are allowed.`;
+        console.warn("StepUpload:", msg);
+        setErrorMsg(msg);
+        return;
       }
+      if (f.size > 10 * 1024 * 1024) {
+        const msg = `Upload failed: File "${f.name}" exceeds the maximum allowed limit of 10MB.`;
+        console.warn("StepUpload:", msg);
+        setErrorMsg(msg);
+        return;
+      }
+      validFiles.push(f);
     }
 
-    if (validationError) {
-      setErrorMsg(validationError);
-      // Auto-clear validation alerts after 5 seconds
-      setTimeout(() => setErrorMsg(null), 5000);
+    if (validFiles.length === 0) {
+      console.warn("StepUpload: no valid files after filtering.");
+      return;
     }
 
-    if (validFiles.length === 0) return;
+    if (files.length + validFiles.length > 50) {
+      const msg = "Maximum of 50 images per album allowed.";
+      console.warn("StepUpload:", msg);
+      setErrorMsg(msg);
+      return;
+    }
 
+    console.log("StepUpload: starting upload process for", validFiles.length, "files");
     setUploading(true);
+    setErrorMsg(null);
     setProgress(0);
+    isCancelledRef.current = false;
 
-    const isCloudinaryActive = UploadService.isConfigured();
+    const measuredFiles: { file: File; width: number; height: number; orientation: number }[] = [];
+    const measurePromises = validFiles.map((file) => {
+      return new Promise<void>((resolve) => {
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        img.onload = async () => {
+          let orientation = 1;
+          try {
+            orientation = await getExifOrientation(file);
+          } catch (e) {
+            console.warn("Exif orientation parse error:", e);
+          }
+          measuredFiles.push({ file, width: img.width, height: img.height, orientation });
+          URL.revokeObjectURL(img.src);
+          resolve();
+        };
+        img.onerror = () => {
+          measuredFiles.push({ file, width: 800, height: 600, orientation: 1 });
+          URL.revokeObjectURL(img.src);
+          resolve();
+        };
+      });
+    });
 
-    // Parallel measurement of image natural dimensions
-    const measuredFiles = await Promise.all(
-      validFiles.map(async (file) => {
-        const dims = await getImageDimensions(file);
-        const orientation = await getExifOrientation(file);
-        return { file, orientation, ...dims };
-      })
-    );
+    await Promise.all(measurePromises);
 
-    if (isCloudinaryActive) {
+    if (UploadService.isConfigured()) {
       setUploadStatus("Uploading to Cloudinary...");
+      const localList: UploadedFile[] = [];
+      const total = measuredFiles.length;
       const progressMap: Record<string, number> = {};
-      const uploadedResults: UploadedFile[] = [];
-
       validFiles.forEach((f) => {
         progressMap[f.name] = 0;
       });
 
       try {
-        const uploadPromises = measuredFiles.map(async (fileObj) => {
-          const result = await UploadService.uploadImage(fileObj.file, (percent) => {
-            progressMap[fileObj.file.name] = percent;
+        for (let idx = 0; idx < total; idx++) {
+          const fileObj = measuredFiles[idx];
+          const result = await UploadService.uploadImage(fileObj.file, (p) => {
+            progressMap[fileObj.file.name] = p;
             const avg = Math.round(
-              Object.values(progressMap).reduce((sum, curr) => sum + curr, 0) / validFiles.length
+              Object.values(progressMap).reduce((sum, curr) => sum + curr, 0) / total
             );
             setProgress(avg);
           });
 
-          // Generate Cloudinary optimized/thumbnail links
           const { optimizedUrl, thumbnailUrl } = await generateImageVariants(fileObj.file, result.secure_url);
 
-          uploadedResults.push({
+          localList.push({
             id: result.public_id,
             url: result.secure_url,
             name: fileObj.file.name,
             width: fileObj.width,
             height: fileObj.height,
-            orientation: fileObj.orientation,
             optimizedUrl,
             thumbnailUrl,
+            orientation: fileObj.orientation
           });
-        });
-
-        await Promise.all(uploadPromises);
-        onFilesChange([...files, ...uploadedResults]);
-      } catch {
-        setErrorMsg("Failed to upload photo. Please check your network connection and try again.");
-        setTimeout(() => setErrorMsg(null), 6000);
+        }
+        onFilesChange([...files, ...localList]);
+      } catch (err: any) {
+        console.error("Cloudinary upload error:", err);
+        setErrorMsg("Failed to upload to Cloudinary. Check console.");
       } finally {
         setUploading(false);
       }
     } else {
-      setUploadStatus("Generating optimized preview sizes...");
+      setUploadStatus("Preparing...");
       const localList: UploadedFile[] = [];
       const total = measuredFiles.length;
 
-      for (let idx = 0; idx < total; idx++) {
-        const f = measuredFiles[idx];
-        const { optimizedUrl, thumbnailUrl } = await generateImageVariants(f.file);
-        
-        localList.push({
-          id: Math.random().toString(36).substring(2, 9),
-          url: URL.createObjectURL(f.file),
-          name: f.file.name,
-          width: f.width,
-          height: f.height,
-          orientation: f.orientation,
-          optimizedUrl,
-          thumbnailUrl,
-        });
+      try {
+        const photoService = new PhotoService();
+        const devUserId = "11111111-1111-1111-1111-111111111111";
+        const currentAlbumId = albumId || "22222222-2222-2222-2222-222222222222";
 
-        setProgress(Math.round(((idx + 1) / total) * 100));
+        for (let idx = 0; idx < total; idx++) {
+          if (isCancelledRef.current) {
+            console.log("StepUpload: upload cancelled by user");
+            setErrorMsg("Upload cancelled by user.");
+            break;
+          }
+          const f = measuredFiles[idx];
+          console.log(`StepUpload: processing image ${idx + 1}/${total}: ${f.file.name}`);
+          
+          setUploadStatus(`Preparing image ${idx + 1} of ${total}...`);
+          await new Promise((r) => setTimeout(r, 150));
+          if (isCancelledRef.current) break;
+
+          setUploadStatus(`Compressing image ${idx + 1} of ${total}...`);
+          await new Promise((r) => setTimeout(r, 150));
+          if (isCancelledRef.current) break;
+
+          setUploadStatus(`Uploading image ${idx + 1} of ${total}...`);
+          const result = await photoService.uploadPhoto(
+            devUserId,
+            currentAlbumId,
+            f.file,
+            files.length + idx,
+            f.orientation
+          );
+          if (isCancelledRef.current) break;
+
+          setUploadStatus(`Saving image ${idx + 1} of ${total}...`);
+          await new Promise((r) => setTimeout(r, 150));
+          if (isCancelledRef.current) break;
+
+          console.log(`StepUpload: finished uploading image ${idx + 1}/${total}: ${f.file.name} -> storageFileId: ${result.storageFileId}`);
+          localList.push({
+            id: result.storageFileId,
+            url: result.url,
+            name: f.file.name,
+            width: result.width || f.width,
+            height: result.height || f.height,
+            orientation: f.orientation,
+            optimizedUrl: result.optimizedUrl || result.url,
+            thumbnailUrl: result.thumbnailUrl || result.url,
+          });
+
+          const avg = Math.round(((idx + 1) / total) * 100);
+          setProgress(avg);
+        }
+
+        if (!isCancelledRef.current) {
+          setUploadStatus("Completed");
+          onFilesChange([...files, ...localList]);
+        }
+      } catch (err: any) {
+        console.error("Google Drive / Supabase upload error:", err);
+        setErrorMsg(`Upload failed: ${err.message || err}`);
+        setTimeout(() => setErrorMsg(null), 6000);
+      } finally {
+        setUploading(false);
       }
-
-      setUploading(false);
-      onFilesChange([...files, ...localList]);
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleUpload(e.dataTransfer.files);
-    }
-  };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      handleUpload(e.target.files);
-    }
-  };
 
   const handleRemoveFile = (id: string) => {
     const fileToRemove = files.find((f) => f.id === id);
@@ -235,7 +294,7 @@ export default function StepUpload({ files, onFilesChange, onNext, onBack }: Ste
           <input
             type="file"
             ref={fileInputRef}
-            onChange={handleFileChange}
+            onChange={handleChange}
             multiple
             accept="image/*"
             className="hidden"
@@ -260,6 +319,14 @@ export default function StepUpload({ files, onFilesChange, onNext, onBack }: Ste
               <div className="h-full bg-sky-500 transition-all duration-300" style={{ width: `${progress}%` }} />
             </div>
             <p className="text-[10px] font-mono text-slate-500">{progress}% complete</p>
+          </div>
+          <div>
+            <button
+              onClick={() => handleCancelUpload()}
+              className="text-xs text-rose-400 hover:text-rose-300 font-bold px-4 py-1.5 rounded-lg border border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10 transition-all"
+            >
+              Cancel Upload
+            </button>
           </div>
         </div>
       )}

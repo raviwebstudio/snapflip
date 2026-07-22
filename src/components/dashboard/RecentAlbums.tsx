@@ -31,10 +31,22 @@ export default function RecentAlbums() {
   const searchVal = searchParams.get("search") || "";
   const { addToast } = useToastStore();
 
-  const [albums, setAlbums] = useState<Album[]>(() => DbService.getAlbums());
+  const [albums, setAlbums] = useState<Album[]>([]);
   const [filter, setFilter] = useState("all");
   const [sortBy, setSortBy] = useState("date-desc");
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+
+  // Retrieve Studio Name for QR Cards (UI Fix Sprint)
+  const studioName = (() => {
+    try {
+      const savedBrand = localStorage.getItem("snapflip_settings_brand");
+      if (!savedBrand) return "";
+      const brand = JSON.parse(savedBrand);
+      return brand.studioName || "";
+    } catch {
+      return "";
+    }
+  })();
 
   // Modal states
   const [renameState, setRenameState] = useState<{ isOpen: boolean; id: string; name: string }>({
@@ -117,8 +129,16 @@ export default function RecentAlbums() {
   }, [deleteState.isOpen]);
 
   // Refresh lists helper
-  const refreshAlbums = () => {
-    setAlbums(DbService.getAlbums());
+  const refreshAlbums = async () => {
+    try {
+      console.log("RecentAlbums: VITE_SUPABASE_URL =", import.meta.env.VITE_SUPABASE_URL);
+      const list = await DbService.getAlbums();
+      console.log("RecentAlbums: Fetched albums count =", list.length);
+      console.log("RecentAlbums: Albums soft_delete_at values =", list.map(a => `${a.name}: ${a.soft_delete_at}`));
+      setAlbums(list.filter((a) => !a.soft_delete_at));
+    } catch (err) {
+      console.error("Failed to load albums:", err);
+    }
   };
 
   // Close dropdowns on click outside
@@ -144,55 +164,57 @@ export default function RecentAlbums() {
     });
   }, []);
 
-  const handleDuplicate = (id: string) => {
+  const handleDuplicate = async (id: string) => {
     try {
-      DbService.duplicateAlbum(id);
+      await DbService.duplicateAlbum(id);
       addToast("Album collection duplicated successfully!", "success");
-      refreshAlbums();
+      await refreshAlbums();
     } catch {
       addToast("Failed to duplicate album.", "error");
     }
     setActiveDropdown(null);
   };
 
-  const handleRenameSubmit = (e: React.FormEvent) => {
+  const handleRenameSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!renameState.name.trim()) return;
     try {
-      DbService.updateAlbum(renameState.id, { name: renameState.name });
+      await DbService.updateAlbum(renameState.id, { name: renameState.name });
       addToast("Collection renamed successfully!", "success");
       setRenameState({ isOpen: false, id: "", name: "" });
-      refreshAlbums();
+      await refreshAlbums();
     } catch {
       addToast("Failed to rename collection.", "error");
     }
   };
 
-  const handleDeleteConfirm = () => {
+  const handleDeleteConfirm = async () => {
+    console.log("RecentAlbums: handleDeleteConfirm called with deleteState =", deleteState);
     const targetAlbum = albums.find((a) => a.id === deleteState.id);
-    if (!targetAlbum) return;
+    console.log("RecentAlbums: targetAlbum =", targetAlbum);
+    if (!targetAlbum) {
+      console.warn("RecentAlbums: targetAlbum not found!");
+      return;
+    }
 
     try {
-      // Remove album from DB
-      DbService.deleteAlbum(targetAlbum.id);
+      console.log("RecentAlbums: calling DbService.softDeleteAlbum for", targetAlbum.id);
+      const res = await DbService.softDeleteAlbum(targetAlbum.id);
+      console.log("RecentAlbums: softDeleteAlbum returned", res);
       setDeleteState({ isOpen: false, id: "", name: "" });
-      refreshAlbums();
+      await refreshAlbums();
 
       // Show success toast with Undo option available for 5 seconds
-      addToast("Album deleted successfully.", "success", {
+      addToast("Album moved to Trash.", "success", {
         label: "Undo",
-        onClick: () => {
+        onClick: async () => {
           try {
-            // Restore album back to DB
-            const albumsList = DbService.getAlbums();
-            if (!albumsList.some((a) => a.id === targetAlbum.id)) {
-              albumsList.push(targetAlbum);
-              localStorage.setItem("snapflip_albums", JSON.stringify(albumsList));
-            }
+            // Restore album back
+            await DbService.restoreAlbum(targetAlbum.id);
             
             // Dispatch storage event to update grid/stats/counts/storage immediately
             window.dispatchEvent(new Event("storage"));
-            refreshAlbums();
+            await refreshAlbums();
             addToast("Album collection restored successfully!", "success");
           } catch {
             addToast("Failed to restore album.", "error");
@@ -207,26 +229,15 @@ export default function RecentAlbums() {
     }
   };
 
-  const handlePublishConfirm = () => {
+  const handlePublishConfirm = async () => {
     try {
-      DbService.publishAlbum(publishState.id);
+      await DbService.publishAlbum(publishState.id);
       addToast("Album published successfully!", "success");
       setPublishState({ isOpen: false, id: "", name: "" });
-      refreshAlbums();
+      await refreshAlbums();
     } catch {
       addToast("Failed to publish album.", "error");
     }
-  };
-
-  const handleUnpublish = (id: string) => {
-    try {
-      DbService.unpublishAlbum(id);
-      addToast("Album unpublished and moved back to Drafts.", "success");
-      refreshAlbums();
-    } catch {
-      addToast("Failed to unpublish album.", "error");
-    }
-    setActiveDropdown(null);
   };
 
   const handleCopyLink = (url: string) => {
@@ -237,7 +248,7 @@ export default function RecentAlbums() {
   };
 
   const handleOpenShare = async (album: Album) => {
-    const shareUrl = `${window.location.origin}/view/${album.id}`;
+    const shareUrl = `${window.location.origin}/album/${album.slug || album.id}`;
     
     // Check if album settings already has QR code stored
     let qrPng = album.settings?.qrCodeDataUrl || "";
@@ -270,8 +281,8 @@ export default function RecentAlbums() {
           qrCodeDataUrl: qrPng,
           qrCodeSvg: qrSvg
         };
-        DbService.updateAlbum(album.id, { settings: updatedSettings });
-        refreshAlbums();
+        await DbService.updateAlbum(album.id, { settings: updatedSettings });
+        await refreshAlbums();
       } catch {
         addToast("Failed to generate QR Code.", "error");
       }
@@ -288,8 +299,8 @@ export default function RecentAlbums() {
 
   const handleDownloadPng = () => {
     if (!shareState.qrPng || !shareState.album) return;
-    const { name, coupleName, id } = shareState.album;
-    const url = `${window.location.origin}/view/${id}`;
+    const { name, coupleName, id, slug } = shareState.album;
+    const url = `${window.location.origin}/album/${slug || id}`;
     const qrPng = shareState.qrPng;
 
     const SCALE = 2;
@@ -386,13 +397,18 @@ export default function RecentAlbums() {
       ctx.fillText("SCAN TO VIEW ALBUM", W / 2, scanY);
 
       // 8. URL text
-      const urlY = scanY + 18 * SCALE;
-      ctx.font = `400 ${9 * SCALE}px monospace`;
-      ctx.fillStyle = "#64748b";
-      ctx.fillText(url, W / 2, urlY);
+      const isDev = url.includes("localhost") || url.includes("127.0.0.1") || url.includes("192.168.") || url.includes("dev") || url.includes("staging");
+      const displayUrl = isDev ? "" : url;
+      let nextY = scanY;
+      if (displayUrl) {
+        nextY = scanY + 18 * SCALE;
+        ctx.font = `400 ${9 * SCALE}px monospace`;
+        ctx.fillStyle = "#64748b";
+        ctx.fillText(displayUrl, W / 2, nextY);
+      }
 
       // 9. Separator line
-      const sepY = urlY + 36 * SCALE;
+      const sepY = nextY + (displayUrl ? 36 : 24) * SCALE;
       ctx.strokeStyle = "#1e293b";
       ctx.lineWidth = 1 * SCALE;
       ctx.beginPath();
@@ -418,9 +434,11 @@ export default function RecentAlbums() {
 
   const handleDownloadSvg = () => {
     if (!shareState.qrPng || !shareState.album) return;
-    const { name, coupleName, id } = shareState.album;
-    const viewUrl = `${window.location.origin}/view/${id}`;
+    const { name, coupleName, id, slug } = shareState.album;
+    const viewUrl = `${window.location.origin}/album/${slug || id}`;
     const qrPng = shareState.qrPng;
+    const isDev = viewUrl.includes("localhost") || viewUrl.includes("127.0.0.1") || viewUrl.includes("192.168.") || viewUrl.includes("dev") || viewUrl.includes("staging");
+    const displayUrl = isDev ? "" : viewUrl;
 
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="540" viewBox="0 0 360 540">
   <defs>
@@ -436,7 +454,7 @@ export default function RecentAlbums() {
   <rect x="90" y="140" width="180" height="180" rx="16" ry="16" fill="#ffffff"/>
   <image href="${qrPng}" x="100" y="150" width="160" height="160" clip-path="url(#card-clip)"/>
   <text x="180" y="348" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-weight="700" font-size="11" fill="#38bdf8" letter-spacing="0.15em">SCAN TO VIEW ALBUM</text>
-  <text x="180" y="366" text-anchor="middle" font-family="monospace" font-size="9" fill="#64748b">${viewUrl.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</text>
+  ${displayUrl ? `<text x="180" y="366" text-anchor="middle" font-family="monospace" font-size="9" fill="#64748b">${displayUrl.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</text>` : ""}
   <line x1="60" y1="400" x2="300" y2="400" stroke="#1e293b" stroke-width="1"/>
   <text x="180" y="424" text-anchor="middle" font-family="monospace" font-size="9" fill="#475569" letter-spacing="0.15em">POWERED BY SNAPFLIP</text>
 </svg>`;
@@ -453,8 +471,7 @@ export default function RecentAlbums() {
 
   const handlePrintQR = () => {
     if (!shareState.album || !shareState.qrPng) return;
-    const { name, coupleName, id } = shareState.album;
-    const url = `${window.location.origin}/view/${id}`;
+    const { name, coupleName } = shareState.album;
     const qrPng = shareState.qrPng;
     
     const printWindow = window.open("", "_blank");
@@ -598,7 +615,7 @@ export default function RecentAlbums() {
         </head>
         <body>
           <div class="qr-card">
-            <div class="logo">Snap<span>Flip</span></div>
+            <div class="logo">${studioName}</div>
             <div class="details">
               <h3 class="album-name">${name}</h3>
               <p class="client-name">${coupleName}</p>
@@ -608,7 +625,6 @@ export default function RecentAlbums() {
             </div>
             <div>
               <span class="scan-text">Scan to View Album</span>
-              <p class="url-text">${url}</p>
             </div>
             <div class="footer">
               Powered by SnapFlip
@@ -801,9 +817,10 @@ export default function RecentAlbums() {
 
               {/* Danger Warning Message */}
               <div className="space-y-2">
-                <h3 className="text-sm font-black text-slate-100 uppercase tracking-widest">Delete Collection</h3>
+                <h3 className="text-sm font-black text-slate-100 uppercase tracking-widest">Delete Album?</h3>
                 <p className="text-xs text-slate-400 leading-relaxed">
-                  Are you sure you want to delete this album? <span className="text-rose-400 font-bold block mt-1">This action cannot be undone.</span>
+                  This album will be moved to Trash.<br />
+                  You can restore it within 14 days.
                 </p>
               </div>
 
@@ -821,7 +838,7 @@ export default function RecentAlbums() {
                   onClick={() => handleDeleteConfirm()}
                   className="px-4 py-2 text-xs font-bold uppercase tracking-wider rounded-lg bg-rose-500 hover:bg-rose-400 text-slate-950 cursor-pointer shadow-lg shadow-rose-500/15"
                 >
-                  Delete Album
+                  Delete
                 </button>
               </div>
             </div>
@@ -865,7 +882,7 @@ export default function RecentAlbums() {
       {/* Redesigned Share & Printable QR Code Modal (P5-015) */}
       {shareState.isOpen && shareState.album && (() => {
         const shareAlbum = shareState.album;
-        const shareUrl = `${window.location.origin}/view/${shareAlbum.id}`;
+        const shareUrl = `${window.location.origin}/album/${shareAlbum.slug || shareAlbum.id}`;
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
             <div className="rounded-3xl border border-slate-900 bg-slate-950 p-6 max-w-md w-full space-y-6 shadow-2xl shadow-sky-500/5 flex flex-col text-slate-200">
@@ -931,7 +948,7 @@ export default function RecentAlbums() {
                   </div>
                   <div className="pt-2">
                     <a
-                      href={`/view/${shareAlbum.id}`}
+                      href={`/album/${shareAlbum.slug || shareAlbum.id}`}
                       target="_blank"
                       rel="noreferrer"
                       className="w-full h-11 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-850 hover:text-white text-slate-200 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 cursor-pointer transition-colors"
@@ -949,8 +966,8 @@ export default function RecentAlbums() {
                     <div className="absolute inset-0 bg-gradient-to-b from-sky-500/5 via-transparent to-transparent pointer-events-none" />
                     
                     {/* Brand header */}
-                    <div className="text-white font-black text-sm tracking-tight uppercase">
-                      Snap<span className="text-sky-400">Flip</span>
+                    <div className="text-white font-black text-sm tracking-tight uppercase min-h-[1.25rem]">
+                      {studioName}
                     </div>
 
                     {/* Album details */}
@@ -971,9 +988,6 @@ export default function RecentAlbums() {
                     {/* QR Scan Instructions */}
                     <div className="space-y-0.5">
                       <span className="text-[9px] font-extrabold uppercase tracking-widest text-sky-400">Scan to View Album</span>
-                      <p className="text-[7px] text-slate-500 font-mono truncate">
-                        {shareUrl}
-                      </p>
                     </div>
 
                     <div className="text-[7px] font-mono text-slate-600 uppercase tracking-widest pt-2 border-t border-slate-900/60">
@@ -1111,12 +1125,25 @@ export default function RecentAlbums() {
             return (
               <div
                 key={album.id}
-                onClick={() => navigate(`/view/${album.id}`)}
+                onClick={(e) => {
+                  const target = e.target as HTMLElement;
+                  console.log("[RecentAlbums] Card onClick target:", target.tagName, "classes:", target.className, "id:", album.id);
+                  if (!document.body.contains(target)) {
+                    console.log("[RecentAlbums] Card onClick ignored because target is detached");
+                    return;
+                  }
+                  if (target.closest("button") || target.closest(".dropdown-menu") || target.closest(".z-10")) {
+                    console.log("[RecentAlbums] Card onClick ignored due to closest check");
+                    return;
+                  }
+                  console.log("[RecentAlbums] Card onClick navigating to viewer...");
+                  navigate(`/album/${album.slug || album.id}`);
+                }}
                 className="rounded-2xl border border-slate-900 bg-slate-950 overflow-hidden flex flex-col justify-between min-h-[250px] shadow-lg group hover:border-[#0B3037]/60 transition-all hover:scale-[1.01] relative cursor-pointer"
               >
                 {/* Cover Image header block */}
                 <div
-                  className="h-28 bg-slate-900 relative p-4 flex items-start justify-between border-b border-slate-900/60 overflow-hidden"
+                  className="h-28 bg-slate-900 relative p-4 flex items-start justify-between border-b border-slate-900/60"
                 >
                   {hasCoverImage && (
                     <img src={album.coverImage} alt={album.name} className="absolute inset-0 h-full w-full object-cover opacity-35 group-hover:opacity-45 transition-opacity" />
@@ -1146,7 +1173,8 @@ export default function RecentAlbums() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        navigate(`/view/${album.id}`);
+                        console.log("[RecentAlbums] ExternalLink button clicked for id:", album.id);
+                        navigate(`/album/${album.slug || album.id}`);
                       }}
                       className="h-7 w-7 rounded-lg bg-slate-950/80 border border-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
                       title="View collection presentation"
@@ -1157,6 +1185,7 @@ export default function RecentAlbums() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          console.log("[RecentAlbums] ActionsMenu button clicked for id:", album.id);
                           setActiveDropdown(activeDropdown === album.id ? null : album.id);
                         }}
                         className="h-7 w-7 rounded-lg bg-slate-950/80 border border-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
@@ -1167,7 +1196,11 @@ export default function RecentAlbums() {
 
                       {/* Floating actions menu */}
                       {activeDropdown === album.id && (
-                        <div className="absolute right-0 mt-1.5 w-40 rounded-xl border border-slate-900 bg-slate-950 py-1.5 shadow-2xl z-20">
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute right-0 mt-1.5 w-40 rounded-xl border border-slate-900 bg-slate-950 py-1.5 shadow-2xl z-20 dropdown-menu"
+                          role="menu"
+                        >
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1177,7 +1210,7 @@ export default function RecentAlbums() {
                             className="w-full px-4 py-2 text-left text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-900/60 flex items-center gap-2 cursor-pointer"
                           >
                             <Edit2 className="h-3.5 w-3.5 text-sky-400" />
-                            Edit Album
+                            Edit
                           </button>
                           <button
                             onClick={(e) => {
@@ -1189,53 +1222,27 @@ export default function RecentAlbums() {
                             <FolderHeart className="h-3.5 w-3.5 text-sky-400" />
                             Duplicate
                           </button>
-                          {isDraft ? (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setPublishState({ isOpen: true, id: album.id, name: album.name });
-                                setActiveDropdown(null);
-                              }}
-                              className="w-full px-4 py-2 text-left text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-900/60 flex items-center gap-2 cursor-pointer"
-                            >
-                              <Send className="h-3.5 w-3.5 text-sky-400" />
-                              Publish
-                            </button>
-                          ) : (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleUnpublish(album.id);
-                              }}
-                              className="w-full px-4 py-2 text-left text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-900/60 flex items-center gap-2 cursor-pointer"
-                            >
-                              <Inbox className="h-3.5 w-3.5 text-sky-400" />
-                              Unpublish
-                            </button>
-                          )}
-                          {!isDraft && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenShare(album);
-                                setActiveDropdown(null);
-                              }}
-                              className="w-full px-4 py-2 text-left text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-900/60 flex items-center gap-2 cursor-pointer"
-                            >
-                              <QrCode className="h-3.5 w-3.5 text-sky-400" />
-                              Share / QR
-                            </button>
-                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenShare(album);
+                              setActiveDropdown(null);
+                            }}
+                            className="w-full px-4 py-2 text-left text-xs font-semibold text-slate-300 hover:text-white hover:bg-slate-900/60 flex items-center gap-2 cursor-pointer"
+                          >
+                            <QrCode className="h-3.5 w-3.5 text-sky-400" />
+                            Share
+                          </button>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setDeleteState({ isOpen: true, id: album.id, name: album.name });
                               setActiveDropdown(null);
                             }}
-                            className="w-full px-4 py-2 text-left text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-slate-900/60 border-t border-slate-900 mt-1 pt-2 flex items-center gap-2 cursor-pointer"
+                            className="w-full px-4 py-2 text-left text-xs font-semibold text-rose-500 hover:text-rose-400 hover:bg-slate-900/60 border-t border-slate-900 mt-1 pt-2 flex items-center gap-2 cursor-pointer"
                           >
-                            <Trash className="h-3.5 w-3.5 text-rose-400" />
-                            Delete
+                            <Trash className="h-3.5 w-3.5 text-rose-500" />
+                            Delete Album
                           </button>
                         </div>
                       )}

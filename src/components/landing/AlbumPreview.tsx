@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Play, Pause, Maximize2, RotateCcw } from "lucide-react";
 import BookEngine, { type BookEngineRef } from "../viewer/BookEngine";
@@ -44,21 +44,25 @@ const LOCAL_DEMO_ALBUM: Album = {
 export default function AlbumPreview() {
   const bookEngineRef = useRef<BookEngineRef>(null);
 
-  // Fetch from database if available, fallback to local constant
-  const demoAlbum = useMemo(() => {
-    try {
-      const fetched = DbService.getAlbumById("demo-album");
-      return fetched || LOCAL_DEMO_ALBUM;
-    } catch {
-      return LOCAL_DEMO_ALBUM;
-    }
-  }, []);
-
+  const [demoAlbum, setDemoAlbum] = useState<Album>(LOCAL_DEMO_ALBUM);
   const [currentPage, setCurrentPage] = useState(0);
   const [isAutoplayActive, setIsAutoplayActive] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
 
-  const totalPhotos = demoAlbum.photos.length;
+  // Fetch from database asynchronously on mount
+  useEffect(() => {
+    DbService.getAlbumById("demo-album")
+      .then((fetched) => {
+        if (fetched) {
+          setDemoAlbum(fetched);
+        }
+      })
+      .catch((err) => {
+        console.warn("Failed to load demo-album from Supabase, using local fallback:", err);
+      });
+  }, []);
+
+  const totalPhotos = demoAlbum?.photos?.length || 0;
   const hasFillerPage = (totalPhotos + 2) % 2 !== 0;
   const totalPages = totalPhotos + 2 + (hasFillerPage ? 1 : 0);
 

@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { User, Camera, Bell, HardDrive, ShieldCheck, Check } from "lucide-react";
+import { User, Camera, Bell, ShieldCheck, Check } from "lucide-react";
 import { useAppStore, useToastStore } from "../../store";
 
 export default function Settings() {
@@ -15,6 +15,8 @@ export default function Settings() {
 
   const logoInputRef = useRef<HTMLInputElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+
+
 
   const [profile, setProfile] = useState({
     fullName: storeProfile.fullName,
@@ -349,33 +351,6 @@ export default function Settings() {
                 />
               </button>
             </div>
-          </div>
-        </div>
-
-        {/* Storage Information */}
-        <div className="rounded-2xl border border-slate-900 bg-slate-950 p-6 space-y-6 shadow-lg">
-          <div className="flex items-center gap-2 text-slate-200 border-b border-slate-900/60 pb-3">
-            <HardDrive className="h-4.5 w-4.5 text-sky-400" />
-            <h3 className="text-sm font-bold uppercase tracking-wider">Storage Information</h3>
-          </div>
-
-          <div className="space-y-4">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-slate-400">Staged Space Occupied</span>
-              <span className="font-semibold text-slate-200 font-mono">1.2 GB / 50 GB Used</span>
-            </div>
-
-            {/* Simulated Progress bar */}
-            <div className="h-2 w-full bg-slate-900 rounded-full overflow-hidden">
-              <div className="h-full bg-sky-500 rounded-full" style={{ width: "2.4%" }} />
-            </div>
-
-            <p className="text-[10px] text-slate-500 leading-normal">
-              High resolution photo uploads consume space quickly. Upgrade your plan to expand storage capacity.{" "}
-              <span className="text-sky-400 font-mono italic text-[9px] block sm:inline">
-                (Subscription upgrade coming in Phase 4)
-              </span>
-            </p>
           </div>
         </div>
 

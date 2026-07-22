@@ -11,11 +11,11 @@ test.describe('Dashboard Page E2E Suite', () => {
     // Verify main workspace layout elements
     if (isDesktop) {
       await expect(dashboard.sidebar).toBeVisible();
+      await expect(dashboard.settingsTab).toBeVisible();
+      await expect(dashboard.pricingTab).toBeVisible();
     }
     await expect(dashboard.createAlbumBtn).toBeVisible();
     await expect(dashboard.albumsTab).toBeVisible();
-    await expect(dashboard.settingsTab).toBeVisible();
-    await expect(dashboard.pricingTab).toBeVisible();
 
     // Verify dynamic statistics cards
     await expect(page.locator('text=Total Albums')).toBeVisible();

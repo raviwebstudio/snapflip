@@ -3,11 +3,22 @@ import { Library, Image, Eye, HardDrive } from "lucide-react";
 import { DbService } from "../../services/dbService";
 
 export default function Stats() {
-  const [albums, setAlbums] = useState(() => DbService.getAlbums());
+  const [albums, setAlbums] = useState<any[]>([]);
+
+  const loadStats = async () => {
+    try {
+      const list = await DbService.getAlbums();
+      setAlbums(list);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   useEffect(() => {
+    loadStats();
+    
     const handleStorageChange = () => {
-      setAlbums(DbService.getAlbums());
+      loadStats();
     };
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);

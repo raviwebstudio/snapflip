@@ -1,6 +1,13 @@
+import { supabase } from '../lib/supabase';
+import { AlbumRepository } from '../repositories/AlbumRepository';
+import { PhotoRepository } from '../repositories/PhotoRepository';
+import { DraftRepository } from '../repositories/DraftRepository';
+import { AlbumService } from './AlbumService';
+
 export interface Album {
   id: string;
   name: string;
+  slug?: string;
   coupleName: string;
   eventType: string;
   eventDate: string;
@@ -35,11 +42,14 @@ export interface Album {
   status: "Draft" | "Published";
   updated: string;
   gradient: string;
+  published_at?: string;
+  soft_delete_at?: string;
 }
 
 const DEFAULT_ALBUMS: Album[] = [
   {
     id: "wedding-coll",
+    slug: "wedding-coll",
     name: "Wedding Collection",
     coupleName: "Sarah & Mark",
     eventType: "wedding",
@@ -69,6 +79,7 @@ const DEFAULT_ALBUMS: Album[] = [
   },
   {
     id: "pre-wedding",
+    slug: "pre-wedding",
     name: "Pre Wedding",
     coupleName: "Alisha & Kabir",
     eventType: "engagement",
@@ -86,8 +97,8 @@ const DEFAULT_ALBUMS: Album[] = [
       description: "Alisha & Kabir's Pre Wedding Highlights",
       theme: "light",
       music: "acoustic",
-      visibility: "Public",
-      passcode: "",
+      visibility: "Private",
+      passcode: "123456",
       watermark: false,
       allowDownload: true,
       albumSize: "a4-portrait"
@@ -98,6 +109,7 @@ const DEFAULT_ALBUMS: Album[] = [
   },
   {
     id: "reception",
+    slug: "reception",
     name: "Reception Details",
     coupleName: "Maya & Rohan",
     eventType: "reception",
@@ -107,519 +119,532 @@ const DEFAULT_ALBUMS: Album[] = [
       url: "https://images.unsplash.com/photo-1469371670807-013ccf25f16a?auto=format&fit=crop&q=80&w=400",
       name: `reception-${idx}.jpg`,
       width: 1000,
-      height: 1000
+      height: 750
     })),
     coverImage: "https://images.unsplash.com/photo-1469371670807-013ccf25f16a?auto=format&fit=crop&q=80&w=400",
     settings: {
-      title: "Reception Showcase",
+      title: "Reception Details",
       description: "Maya & Rohan's Wedding Reception",
       theme: "dark",
-      music: "none",
-      visibility: "Private",
-      passcode: "1234",
+      music: "jazz-groove",
+      visibility: "Public",
+      passcode: "",
       watermark: true,
-      allowDownload: false,
-      albumSize: "10x10"
+      allowDownload: true,
+      albumSize: "a4-landscape"
     },
-    status: "Draft",
-    updated: "3 days ago",
+    status: "Published",
+    updated: "2 days ago",
     gradient: "from-purple-950/40 to-slate-900",
   },
   {
-    id: "portfolio-coll",
-    name: "Portfolio Collection",
-    coupleName: "Fine Art Stills",
+    id: "editorial-shoot",
+    slug: "editorial-shoot",
+    name: "Fashion Editorial",
+    coupleName: "Elena & Studio",
     eventType: "editorial",
-    eventDate: "2026-04-10",
-    photos: Array(45).fill(null).map((_, idx) => ({
-      id: `po-${idx}`,
-      url: "https://images.unsplash.com/photo-1542038784456-1ea8e935640e?auto=format&fit=crop&q=80&w=400",
-      name: `editorial-${idx}.jpg`,
-      width: 1800,
-      height: 1200
+    eventDate: "2026-05-10",
+    photos: Array(32).fill(null).map((_, idx) => ({
+      id: `e-${idx}`,
+      url: "https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&q=80&w=400",
+      name: `fashion-${idx}.jpg`,
+      width: 900,
+      height: 1350
     })),
-    coverImage: "https://images.unsplash.com/photo-1542038784456-1ea8e935640e?auto=format&fit=crop&q=80&w=400",
+    coverImage: "https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&q=80&w=400",
     settings: {
-      title: "Fine Art Portfolio",
-      description: "Studio Editorial & Portrait Portfolio",
-      theme: "system",
-      music: "classical",
+      title: "Fashion Editorial",
+      description: "Elena's Premium Fashion Editorial Showcase",
+      theme: "dark",
+      music: "electronic-ambient",
       visibility: "Public",
       passcode: "",
       watermark: false,
-      allowDownload: true,
-      albumSize: "12x18"
+      allowDownload: false,
+      albumSize: "a4-portrait"
     },
     status: "Published",
-    updated: "1 week ago",
+    updated: "3 weeks ago",
     gradient: "from-slate-900 to-slate-950",
   },
   {
     id: "demo-album",
-    name: "Wedding & Editorial Showcase",
-    coupleName: "Charlotte & Daniel",
-    eventType: "wedding",
-    eventDate: "2026-06-28",
-    photos: [
-      { id: "d-1", url: "/demo-album/photo1.jpg", name: "ceremony-entrance.jpg", width: 800, height: 1200 },
-      { id: "d-2", url: "/demo-album/photo2.jpg", name: "vows-exchange.jpg", width: 1200, height: 800 },
-      { id: "d-3", url: "/demo-album/photo3.jpg", name: "bridal-portrait.jpg", width: 800, height: 1200 },
-      { id: "d-4", url: "/demo-album/photo4.jpg", name: "reception-banquet.jpg", width: 1200, height: 800 },
-      { id: "d-5", url: "/demo-album/photo5.jpg", name: "groom-portrait.jpg", width: 800, height: 1200 },
-      { id: "d-6", url: "/demo-album/photo6.jpg", name: "details-rings.jpg", width: 1000, height: 1000 },
-      { id: "d-7", url: "/demo-album/photo7.jpg", name: "venue-decor.jpg", width: 1200, height: 800 },
-      { id: "d-8", url: "/demo-album/photo8.jpg", name: "editorial-session.jpg", width: 800, height: 1200 },
-      { id: "d-9", url: "/demo-album/photo9.jpg", name: "sunset-escape.jpg", width: 1200, height: 800 },
-      { id: "d-10", url: "/demo-album/photo10.jpg", name: "bridal-veil-close.jpg", width: 800, height: 1200 }
-    ],
-    coverImage: "/demo-album/cover.jpg",
+    slug: "demo-album",
+    name: "Aura Showcase",
+    coupleName: "Aura Demo Portfolio",
+    eventType: "editorial",
+    eventDate: "2026-07-04",
+    photos: Array(6).fill(null).map((_, idx) => {
+      const urls = [
+        "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200",
+        "https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&q=80&w=1200",
+        "https://images.unsplash.com/photo-1469371670807-013ccf25f16a?auto=format&fit=crop&q=80&w=1200",
+        "https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&q=80&w=1200",
+        "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&q=80&w=1200",
+        "https://images.unsplash.com/photo-1519225495810-7512c696505a?auto=format&fit=crop&q=80&w=1200"
+      ];
+      const names = ["landscape1.jpg", "portrait1.jpg", "landscape2.jpg", "portrait2.jpg", "landscape3.jpg", "landscape4.jpg"];
+      const widths = [1200, 800, 1000, 900, 1200, 1200];
+      const heights = [800, 1200, 750, 1350, 800, 800];
+      return {
+        id: `demo-${idx}`,
+        url: urls[idx],
+        name: names[idx],
+        width: widths[idx],
+        height: heights[idx]
+      };
+    }),
+    coverImage: "https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&q=80&w=1200",
     settings: {
-      title: "Showcase Album",
-      description: "Charlotte & Daniel's Premium Photography Album Showcase.",
+      title: "Aura Showcase",
+      description: "Premium photographer presentation showcase book.",
       theme: "dark-luxury",
       music: "fine-art",
       visibility: "Public",
       passcode: "",
-      watermark: true,
+      watermark: false,
       allowDownload: true,
       albumSize: "auto"
     },
     status: "Published",
     updated: "Just now",
-    gradient: "from-[#0b3037] to-slate-900",
+    gradient: "from-[#0b3037] to-slate-900"
   }
 ];
-import { normalizeAlbum } from "../utils/albumUtils";
 
-const DB_NAME = "snapflip_binary_db";
-const STORE_NAME = "images";
-const localBlobUrls = new Map<string, string>();
-let dbInstance: IDBDatabase | null = null;
-let isLoaded = false;
-const loadCallbacks = new Set<() => void>();
+const albumRepo = new AlbumRepository();
+const photoRepo = new PhotoRepository();
+const draftRepo = new DraftRepository();
+const albumService = new AlbumService(albumRepo, draftRepo, photoRepo);
 
-function openDB(): Promise<IDBDatabase> {
-  if (dbInstance) return Promise.resolve(dbInstance);
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME);
-      }
-    };
-    request.onsuccess = () => {
-      dbInstance = request.result;
-      resolve(dbInstance);
-    };
-    request.onerror = () => reject(request.error);
-  });
+const devUserId = "11111111-1111-1111-1111-111111111111";
+
+function isUuid(str: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 }
 
-function saveBinary(key: string, blob: Blob): Promise<void> {
-  return openDB().then((db) => {
-    return new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, "readwrite");
-      const store = tx.objectStore(STORE_NAME);
-      const request = store.put(blob, key);
-      request.onsuccess = () => resolve();
-      request.onerror = () => reject(request.error);
-    });
-  });
+function generateSlug(title: string): string {
+  const base = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)+/g, '');
+  
+  return `${base || 'album'}-${Math.random().toString(36).substring(2, 6)}`;
 }
 
-// Load all binaries from IndexedDB on startup
-export function loadAllBinaries(): Promise<void> {
-  if (isLoaded) return Promise.resolve();
-  return openDB().then((db) => {
-    return new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE_NAME, "readonly");
-      const store = tx.objectStore(STORE_NAME);
-      const request = store.openCursor();
-      request.onsuccess = (event) => {
-        const cursor = (event.target as IDBRequest<IDBCursorWithValue | null>).result;
-        if (cursor) {
-          const key = cursor.key as string;
-          const blob = cursor.value as Blob;
-          if (blob instanceof Blob) {
-            const url = URL.createObjectURL(blob);
-            localBlobUrls.set(key, url);
-          }
-          cursor.continue();
-        } else {
-          isLoaded = true;
-          resolve();
-          loadCallbacks.forEach((cb) => cb());
-        }
-      };
-      request.onerror = () => reject(request.error);
-    });
-  });
-}
-
-// Register callback for when binaries are ready in memory
-export function onBinariesLoaded(cb: () => void): () => void {
-  if (isLoaded) {
-    cb();
-    return () => {};
-  }
-  loadCallbacks.add(cb);
-  return () => {
-    loadCallbacks.delete(cb);
+function mapDbAlbumToFrontend(dbAlbum: any, draftPayload: any, photos: any[]): Album {
+  const payload = draftPayload || {};
+  return {
+    id: dbAlbum.id,
+    slug: dbAlbum.slug || "",
+    name: dbAlbum.title || payload.name || "Untitled Collection",
+    coupleName: payload.coupleName || "Event",
+    eventType: payload.eventType || "editorial",
+    eventDate: payload.eventDate || dbAlbum.created_at?.split("T")[0] || new Date().toISOString().split("T")[0],
+    coverImage: payload.coverImage || "",
+    photos: (photos && photos.length > 0)
+      ? photos.map((p) => ({
+          id: p.id,
+          url: p.url,
+          name: p.name || `photo-${p.id}.jpg`,
+          width: p.width || 1200,
+          height: p.height || 800,
+          optimizedUrl: p.optimizedUrl || p.url,
+          thumbnailUrl: p.thumbnailUrl || p.url,
+          orientation: p.orientation || 0
+        }))
+      : (payload.photos || []).map((p: any) => ({
+          id: p.id,
+          url: p.url,
+          name: p.name || `photo-${p.id || 'unknown'}.jpg`,
+          width: p.width || 1200,
+          height: p.height || 800,
+          optimizedUrl: p.optimizedUrl || p.url,
+          thumbnailUrl: p.thumbnailUrl || p.url,
+          orientation: p.orientation || 0
+        })),
+    settings: {
+      title: dbAlbum.title || payload.settings?.title || "Untitled Collection",
+      description: payload.settings?.description || "",
+      theme: payload.settings?.theme || "dark",
+      music: payload.settings?.music || "none",
+      visibility: dbAlbum.visibility === "password_protected" ? "Private" : "Public",
+      passcode: payload.settings?.passcode || "",
+      watermark: payload.settings?.watermark ?? false,
+      allowDownload: payload.settings?.allowDownload ?? true,
+      albumSize: payload.settings?.albumSize || "auto",
+      customWidth: payload.settings?.customWidth,
+      customHeight: payload.settings?.customHeight,
+      customUnit: payload.settings?.customUnit || "mm",
+      detectedSize: payload.settings?.detectedSize,
+      qrCodeDataUrl: payload.settings?.qrCodeDataUrl,
+      qrCodeSvg: payload.settings?.qrCodeSvg,
+    },
+    status: dbAlbum.status === "published" ? "Published" : "Draft",
+    updated: "Just now",
+    gradient: payload.gradient || "from-slate-900 to-slate-950",
+    published_at: payload.published_at || undefined,
+    soft_delete_at: dbAlbum.soft_delete_at || undefined
   };
-}
-
-// Auto-run startup load
-if (typeof window !== "undefined") {
-  loadAllBinaries().catch((err) => console.error("Error loading snapflip binaries:", err));
-}
-
-function dataURLtoBlob(dataurl: string): Blob {
-  const arr = dataurl.split(',');
-  const mime = arr[0].match(/:(.*?);/)![1];
-  const bstr = atob(arr[1]);
-  let n = bstr.length;
-  const u8arr = new Uint8Array(n);
-  while (n--) {
-    u8arr[n] = bstr.charCodeAt(n);
-  }
-  return new Blob([u8arr], { type: mime });
-}
-
-async function processAlbumBinaries(album: Album): Promise<void> {
-  const promises: Promise<void>[] = [];
-
-  // 1. Process coverImage
-  if (album.coverImage && album.coverImage.startsWith("data:image/")) {
-    try {
-      const blob = dataURLtoBlob(album.coverImage);
-      const key = `${album.id}_cover`;
-      const url = URL.createObjectURL(blob);
-      localBlobUrls.set(key, url);
-      const p = saveBinary(key, blob).catch((err) => console.error("Failed to save cover image binary:", err));
-      promises.push(p);
-      album.coverImage = `binary:${album.id}_cover`;
-    } catch (e) {
-      console.error("Failed to convert cover image Base64 to Blob:", e);
-    }
-  } else if (album.coverImage && album.coverImage.startsWith("blob:")) {
-    const key = `${album.id}_cover`;
-    localBlobUrls.set(key, album.coverImage);
-    const p = fetch(album.coverImage)
-      .then((r) => r.blob())
-      .then((blob) => saveBinary(key, blob))
-      .catch((e) => console.error("Failed to persist cover image blob:", e));
-    promises.push(p);
-    album.coverImage = `binary:${album.id}_cover`;
-  }
-
-  // 2. Process photos
-  album.photos.forEach((photo) => {
-    // Process main URL
-    if (photo.url && photo.url.startsWith("data:image/")) {
-      try {
-        const blob = dataURLtoBlob(photo.url);
-        const key = `${photo.id}_url`;
-        const url = URL.createObjectURL(blob);
-        localBlobUrls.set(key, url);
-        const p = saveBinary(key, blob).catch((err) => console.error("Failed to save photo URL binary:", err));
-        promises.push(p);
-        photo.url = `binary:${photo.id}_url`;
-      } catch (e) {
-        console.error("Failed to convert photo URL Base64 to Blob:", e);
-      }
-    } else if (photo.url && photo.url.startsWith("blob:")) {
-      const key = `${photo.id}_url`;
-      localBlobUrls.set(key, photo.url);
-      const p = fetch(photo.url)
-        .then((r) => r.blob())
-        .then((blob) => saveBinary(key, blob))
-        .catch((e) => console.error("Failed to persist photo URL blob:", e));
-      promises.push(p);
-      photo.url = `binary:${photo.id}_url`;
-    }
-
-    // Process optimized URL
-    if (photo.optimizedUrl && photo.optimizedUrl.startsWith("data:image/")) {
-      try {
-        const blob = dataURLtoBlob(photo.optimizedUrl);
-        const key = `${photo.id}_opt`;
-        const url = URL.createObjectURL(blob);
-        localBlobUrls.set(key, url);
-        const p = saveBinary(key, blob).catch((err) => console.error("Failed to save optimized URL binary:", err));
-        promises.push(p);
-        photo.optimizedUrl = `binary:${photo.id}_opt`;
-      } catch (e) {
-        console.error("Failed to convert optimized URL Base64 to Blob:", e);
-      }
-    } else if (photo.optimizedUrl && photo.optimizedUrl.startsWith("blob:")) {
-      const key = `${photo.id}_opt`;
-      localBlobUrls.set(key, photo.optimizedUrl);
-      const p = fetch(photo.optimizedUrl)
-        .then((r) => r.blob())
-        .then((blob) => saveBinary(key, blob))
-        .catch((e) => console.error("Failed to persist optimized URL blob:", e));
-      promises.push(p);
-      photo.optimizedUrl = `binary:${photo.id}_opt`;
-    }
-  });
-
-  await Promise.all(promises);
 }
 
 export class DbService {
   public static onBinariesLoaded(cb: () => void): () => void {
-    return onBinariesLoaded(cb);
+    // No-op fallback since IndexedDB binaries are no longer used
+    setTimeout(cb, 10);
+    return () => {};
   }
 
   /**
-   * Fetch all albums from localStorage database.
-   * Every album passes through normalizeAlbum() to guarantee settings integrity.
+   * Fetch all albums from Supabase.
    */
-  public static getAlbums(): Album[] {
-    const data = localStorage.getItem("snapflip_albums");
-    let list: Album[] = [];
+  public static async getAlbums(): Promise<Album[]> {
+    try {
+      const { data: dbAlbums, error: albumErr } = await supabase
+        .from('albums')
+        .select('*, drafts(payload)')
+        .order('created_at', { ascending: false });
 
-    if (!data) {
-      list = DEFAULT_ALBUMS.map((a) => normalizeAlbum(a as unknown as Record<string, unknown>));
-      localStorage.setItem("snapflip_albums", JSON.stringify(list));
+      if (albumErr) throw albumErr;
+
+      const list: Album[] = [];
+      for (const row of dbAlbums || []) {
+        const photos = await photoRepo.findByAlbum(row.id);
+        const draft = row.drafts?.[0] || row.drafts;
+        const payload = draft ? draft.payload : {};
+        list.push(mapDbAlbumToFrontend(row, payload, photos));
+      }
       return list;
+    } catch (err) {
+      console.error("Error loading albums from Supabase:", err);
+      return [];
+    }
+  }
+
+  /**
+   * Fetch single album by ID/Slug.
+   */
+  public static async getAlbumById(id: string): Promise<Album | undefined> {
+    if (!isUuid(id)) {
+      if (id === "demo-album" || id === "wedding-coll" || id === "pre-wedding" || id === "reception" || id === "editorial-shoot") {
+        return DEFAULT_ALBUMS.find((a) => a.id === id);
+      }
+      // Try to query by slug instead
+      try {
+        const { data: dbAlbum } = await supabase
+          .from('albums')
+          .select('*, drafts(payload)')
+          .eq('slug', id)
+          .maybeSingle();
+        if (dbAlbum) {
+          const photos = await photoRepo.findByAlbum(dbAlbum.id);
+          const draft = dbAlbum.drafts?.[0] || dbAlbum.drafts;
+          const payload = draft ? draft.payload : {};
+          return mapDbAlbumToFrontend(dbAlbum, payload, photos);
+        }
+      } catch (err) {
+        console.warn("Failed to find album by slug:", err);
+      }
+      return undefined;
     }
 
     try {
-      const parsed = JSON.parse(data) as Record<string, unknown>[];
-      list = parsed.map((a) => normalizeAlbum(a));
-    } catch {
-      list = DEFAULT_ALBUMS.map((a) => normalizeAlbum(a as unknown as Record<string, unknown>));
-      localStorage.setItem("snapflip_albums", JSON.stringify(list));
-      return list;
+      const { data: dbAlbum, error } = await supabase
+        .from('albums')
+        .select('*, drafts(payload)')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!dbAlbum) return undefined;
+
+      const photos = await photoRepo.findByAlbum(dbAlbum.id);
+      const draft = dbAlbum.drafts?.[0] || dbAlbum.drafts;
+      const payload = draft ? draft.payload : {};
+      return mapDbAlbumToFrontend(dbAlbum, payload, photos);
+    } catch (err) {
+      console.error("Error finding album by id:", err);
+      return undefined;
     }
+  }
 
-    // Resolve binary placeholders to local object URLs
-    list.forEach((album) => {
-      if (album.coverImage && album.coverImage.startsWith("binary:")) {
-        const key = album.coverImage.substring(7);
-        if (localBlobUrls.has(key)) {
-          album.coverImage = localBlobUrls.get(key)!;
-        } else {
-          // If not loaded yet, fallback to thumbnail of first photo if available
-          const firstPhoto = album.photos[0];
-          if (firstPhoto && firstPhoto.thumbnailUrl) {
-            album.coverImage = firstPhoto.thumbnailUrl;
-          }
-        }
-      }
+  private static async syncPhotos(albumId: string, incomingPhotos: any[]) {
+    const currentPhotos = await photoRepo.findByAlbum(albumId);
+    const incomingPhotoIds = new Set(incomingPhotos.map((p) => p.id));
 
-      album.photos.forEach((photo) => {
-        if (photo.url && photo.url.startsWith("binary:")) {
-          const key = photo.url.substring(7);
-          if (localBlobUrls.has(key)) {
-            photo.url = localBlobUrls.get(key)!;
-          } else if (photo.thumbnailUrl) {
-            photo.url = photo.thumbnailUrl;
-          }
-        }
-        if (photo.optimizedUrl && photo.optimizedUrl.startsWith("binary:")) {
-          const key = photo.optimizedUrl.substring(7);
-          if (localBlobUrls.has(key)) {
-            photo.optimizedUrl = localBlobUrls.get(key)!;
-          } else if (photo.thumbnailUrl) {
-            photo.optimizedUrl = photo.thumbnailUrl;
-          }
-        }
-      });
-    });
+    console.log("[syncPhotos] currentPhotos IDs:", currentPhotos.map(p => ({ id: p.id, storage_file_id: p.storage_file_id })));
+    console.log("[syncPhotos] incomingPhotos IDs:", Array.from(incomingPhotoIds));
 
-    // Ensure demo-album is present in the database (migration check)
-    const hasDemo = list.some((a) => a.id === "demo-album");
-    if (!hasDemo) {
-      const demoRaw = DEFAULT_ALBUMS.find((a) => a.id === "demo-album");
-      if (demoRaw) {
-        const demoNormalized = normalizeAlbum(demoRaw as unknown as Record<string, unknown>);
-        list.push(demoNormalized);
-        localStorage.setItem("snapflip_albums", JSON.stringify(list));
+    // Remove deleted photos
+    for (const p of currentPhotos) {
+      if (!incomingPhotoIds.has(p.id) && !incomingPhotoIds.has(p.storage_file_id)) {
+        await supabase.from('album_photos').delete().eq('id', p.id);
       }
     }
 
-    return list;
+    // Update orientation / order index for remaining or newly uploaded photos
+    for (let idx = 0; idx < incomingPhotos.length; idx++) {
+      const photo = incomingPhotos[idx];
+      const match = currentPhotos.find((p) => p.id === photo.id || p.storage_file_id === photo.id);
+      if (match) {
+        await supabase.from('album_photos')
+          .update({
+            order_index: idx,
+            orientation: photo.orientation || 0
+          })
+          .eq('id', match.id);
+      } else {
+        await supabase.from('album_photos')
+          .update({ order_index: idx })
+          .eq('storage_file_id', photo.id);
+      }
+    }
   }
 
   /**
-   * Save the complete list of albums back to storage.
-   */
-  public static saveAlbums(albums: Album[]): void {
-    localStorage.setItem("snapflip_albums", JSON.stringify(albums));
-  }
-
-  /**
-   * Fetch single album by ID. Result is always normalized.
-   */
-  public static getAlbumById(id: string): Album | undefined {
-    const albums = this.getAlbums();
-    return albums.find((a) => a.id === id);
-  }
-
-  /**
-   * Create or save a new album item.
+   * Create a new album item.
    */
   public static async createAlbum(album: Omit<Album, "id" | "updated" | "gradient">): Promise<Album> {
-    const albums = this.getAlbums();
+    // Ensure dev user exists in the users table first
+    try {
+      await supabase.from('users').upsert({
+        id: devUserId,
+        email: 'dev-user@snapflip.com',
+        name: 'Dev User',
+        role: 'creator',
+      });
+    } catch (e) {
+      console.warn("Failed to upsert dev user in createAlbum:", e);
+    }
+
+    const generatedSlug = generateSlug(album.name);
+    const { data: created, error } = await supabase
+      .from('albums')
+      .insert({
+        user_id: devUserId,
+        title: album.name,
+        slug: generatedSlug,
+        status: album.status?.toLowerCase() || 'draft',
+        visibility: album.settings?.visibility === 'Private' ? 'password_protected' : 'public',
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Create draft record to store metadata payload
     const gradients = [
       "from-[#0b3037] to-slate-900",
       "from-[#051a24] to-slate-900",
       "from-purple-950/40 to-slate-900",
       "from-slate-900 to-slate-950"
     ];
-    const newAlbum: Album = {
+    const gradient = gradients[Math.floor(Math.random() * gradients.length)];
+    const isPublished = album.status === "Published";
+    const payload = {
       ...album,
-      id: Math.random().toString(36).substring(2, 9),
-      updated: "Just now",
-      gradient: gradients[albums.length % gradients.length]
+      id: created.id,
+      slug: generatedSlug,
+      published_at: isPublished ? new Date().toISOString() : undefined,
+      gradient,
+      updated: "Just now"
     };
-    
-    await processAlbumBinaries(newAlbum);
-    
-    albums.unshift(newAlbum);
-    this.saveAlbums(albums);
-    
-    // Return with blob URLs for instant rendering in active session
-    const returnAlbum = { ...newAlbum };
-    if (returnAlbum.coverImage.startsWith("binary:")) {
-      const key = returnAlbum.coverImage.substring(7);
-      if (localBlobUrls.has(key)) returnAlbum.coverImage = localBlobUrls.get(key)!;
+
+    await draftRepo.save(created.id, payload);
+
+    if (album.photos !== undefined) {
+      await this.syncPhotos(created.id, album.photos);
     }
-    returnAlbum.photos = returnAlbum.photos.map((photo) => {
-      const p = { ...photo };
-      if (p.url.startsWith("binary:")) {
-        const key = p.url.substring(7);
-        if (localBlobUrls.has(key)) p.url = localBlobUrls.get(key)!;
-      }
-      if (p.optimizedUrl && p.optimizedUrl.startsWith("binary:")) {
-        const key = p.optimizedUrl.substring(7);
-        if (localBlobUrls.has(key)) p.optimizedUrl = localBlobUrls.get(key)!;
-      }
-      return p;
-    });
-    
-    return returnAlbum;
+
+    const finalPhotos = await photoRepo.findByAlbum(created.id);
+    return mapDbAlbumToFrontend(created, payload, finalPhotos);
   }
 
   /**
    * Update fields of an existing album.
    */
   public static async updateAlbum(id: string, fields: Partial<Album>): Promise<Album> {
-    const albums = this.getAlbums();
-    const index = albums.findIndex((a) => a.id === id);
-    if (index === -1) {
-      throw new Error(`Album with ID ${id} not found.`);
+    if (!isUuid(id)) {
+      if (id === "demo-album" || id === "wedding-coll" || id === "pre-wedding" || id === "reception" || id === "editorial-shoot") {
+        const idx = DEFAULT_ALBUMS.findIndex((a) => a.id === id);
+        if (idx !== -1) {
+          const original = DEFAULT_ALBUMS[idx];
+          const updated = {
+            ...original,
+            ...fields,
+            settings: {
+              ...original.settings,
+              ...(fields.settings || {})
+            },
+            status: fields.status || original.status,
+            published_at: fields.status === 'Published' && original.status !== 'Published' ? new Date().toISOString() : original.published_at || fields.published_at
+          };
+          DEFAULT_ALBUMS[idx] = updated;
+          return updated;
+        }
+      }
+      throw new Error(`Invalid UUID format: ${id}`);
     }
+
+    // Fetch existing album status and slug
+    const { data: currentDbAlbum } = await supabase.from('albums').select('status, slug').eq('id', id).maybeSingle();
+    const existingDbStatus = currentDbAlbum?.status;
+    const existingDbSlug = currentDbAlbum?.slug;
+
+    // 1. Update album record in DB
+    const updateObj: Record<string, any> = {};
+    if (fields.name !== undefined) {
+      updateObj.title = fields.name;
+      if (!existingDbSlug || existingDbStatus === 'draft') {
+        updateObj.slug = generateSlug(fields.name);
+      }
+    }
+    if (fields.status !== undefined) {
+      updateObj.status = fields.status.toLowerCase();
+    }
+    if (fields.settings?.visibility !== undefined) {
+      updateObj.visibility = fields.settings.visibility === 'Private' ? 'password_protected' : 'public';
+    }
+
+    if (Object.keys(updateObj).length > 0) {
+      const { error: updateError } = await supabase.from('albums').update(updateObj).eq('id', id);
+      if (updateError) {
+        console.error("Error updating album status/metadata in DB:", updateError);
+        throw updateError;
+      }
+    }
+
+    // 2. Fetch existing payload, merge fields, and update drafts payload
+    const existingDraft = await draftRepo.findByAlbum(id);
+    const existingPayload = existingDraft ? existingDraft.payload : {};
     
-    const targetAlbum = {
-      ...albums[index],
+    // Determine published_at
+    let publishedAt = existingPayload.published_at;
+    if (fields.status === 'Published' && existingPayload.status !== 'Published') {
+      publishedAt = new Date().toISOString();
+    } else if (fields.published_at) {
+      publishedAt = fields.published_at;
+    }
+
+    const updatedPayload = {
+      ...existingPayload,
       ...fields,
       id,
+      slug: updateObj.slug || existingDbSlug || existingPayload.slug,
+      published_at: publishedAt
     };
-    
-    await processAlbumBinaries(targetAlbum);
-    
-    const updatedAlbum = {
-      ...targetAlbum,
-      updated: "Just now"
-    };
-    
-    albums[index] = updatedAlbum;
-    this.saveAlbums(albums);
-    
-    // Return with blob URLs for instant rendering in active session
-    const returnAlbum = { ...updatedAlbum };
-    if (returnAlbum.coverImage.startsWith("binary:")) {
-      const key = returnAlbum.coverImage.substring(7);
-      if (localBlobUrls.has(key)) returnAlbum.coverImage = localBlobUrls.get(key)!;
+
+    await draftRepo.save(id, updatedPayload);
+
+    // 3. Synchronize album_photos table if photos array is provided
+    if (fields.photos !== undefined) {
+      await this.syncPhotos(id, fields.photos);
     }
-    returnAlbum.photos = returnAlbum.photos.map((photo) => {
-      const p = { ...photo };
-      if (p.url.startsWith("binary:")) {
-        const key = p.url.substring(7);
-        if (localBlobUrls.has(key)) p.url = localBlobUrls.get(key)!;
-      }
-      if (p.optimizedUrl && p.optimizedUrl.startsWith("binary:")) {
-        const key = p.optimizedUrl.substring(7);
-        if (localBlobUrls.has(key)) p.optimizedUrl = localBlobUrls.get(key)!;
-      }
-      return p;
-    });
-    
-    return returnAlbum;
+
+    const { data: updatedAlbum, error: fetchError } = await supabase.from('albums').select('*').eq('id', id).single();
+    if (fetchError) {
+      console.error("Error fetching updated album from DB:", fetchError);
+      throw fetchError;
+    }
+    const finalPhotos = await photoRepo.findByAlbum(id);
+    return mapDbAlbumToFrontend(updatedAlbum, updatedPayload, finalPhotos);
   }
 
   /**
-   * Delete an album.
+   * Soft Delete.
    */
-  public static deleteAlbum(id: string): void {
-    const albums = this.getAlbums();
-    const updated = albums.filter((a) => a.id !== id);
-    this.saveAlbums(updated);
+  public static async softDeleteAlbum(id: string): Promise<boolean> {
+    if (!isUuid(id)) return false;
+    return albumService.softDelete(id);
+  }
+
+  /**
+   * Restore.
+   */
+  public static async restoreAlbum(id: string): Promise<boolean> {
+    if (!isUuid(id)) return false;
+    return albumService.restore(id);
+  }
+
+  /**
+   * Permanently delete an album.
+   */
+  public static async permanentDeleteAlbum(id: string): Promise<void> {
+    if (!isUuid(id)) return;
+    await albumService.hardDelete(devUserId, id);
   }
 
   /**
    * Duplicate an existing album.
    */
-  public static duplicateAlbum(id: string): Album {
-    const albums = this.getAlbums();
-    const target = albums.find((a) => a.id === id);
-    if (!target) {
-      throw new Error(`Album with ID ${id} not found.`);
+  public static async duplicateAlbum(id: string): Promise<Album> {
+    if (!isUuid(id)) {
+      throw new Error(`Invalid UUID format: ${id}`);
     }
-    const duplicated: Album = {
-      ...target,
-      id: Math.random().toString(36).substring(2, 9),
-      name: `${target.name} (Copy)`,
-      updated: "Just now",
-      status: "Draft" // Duplicates start as Draft by default
-    };
-    albums.unshift(duplicated);
-    this.saveAlbums(albums);
-    return duplicated;
+
+    const original = await this.getAlbumById(id);
+    if (!original) throw new Error(`Album with ID ${id} not found.`);
+
+    const duplicated = await this.createAlbum({
+      name: `${original.name} (Copy)`,
+      coupleName: original.coupleName,
+      eventType: original.eventType,
+      eventDate: original.eventDate,
+      photos: [],
+      coverImage: original.coverImage,
+      settings: {
+        ...original.settings,
+        title: `${original.settings.title} (Copy)`,
+      },
+      status: "Draft",
+    });
+
+    // Copy photos link rows
+    for (let idx = 0; idx < original.photos.length; idx++) {
+      const p = original.photos[idx];
+      // Since it's duplicated, we can link it to the same storage_files in Supabase
+      if (p.id) {
+        // Find storage_file row linked to this photo
+        const { data: apRow } = await supabase
+          .from('album_photos')
+          .select('storage_file_id')
+          .eq('id', p.id)
+          .maybeSingle();
+
+        if (apRow && apRow.storage_file_id) {
+          await photoRepo.create({
+            album_id: duplicated.id,
+            storage_file_id: apRow.storage_file_id,
+            order_index: idx,
+            orientation: p.orientation || 0
+          });
+        }
+      }
+    }
+
+    return (await this.getAlbumById(duplicated.id))!;
   }
 
   /**
    * Publish a draft album.
    */
-  public static publishAlbum(id: string): Album {
-    const albums = this.getAlbums();
-    const index = albums.findIndex((a) => a.id === id);
-    if (index === -1) {
-      throw new Error(`Album with ID ${id} not found.`);
+  public static async publishAlbum(id: string): Promise<Album> {
+    if (!isUuid(id)) {
+      throw new Error(`Invalid UUID format: ${id}`);
     }
-    const target = albums[index];
-    const updatedAlbum: Album = {
-      ...target,
-      status: "Published",
-      updated: "Just now"
-    };
-    albums[index] = updatedAlbum;
-    this.saveAlbums(albums);
-    return updatedAlbum;
+    await albumService.publish(id);
+    return (await this.getAlbumById(id))!;
   }
 
   /**
    * Unpublish an album.
    */
-  public static unpublishAlbum(id: string): Album {
-    const albums = this.getAlbums();
-    const index = albums.findIndex((a) => a.id === id);
-    if (index === -1) {
-      throw new Error(`Album with ID ${id} not found.`);
+  public static async unpublishAlbum(id: string): Promise<Album> {
+    if (!isUuid(id)) {
+      throw new Error(`Invalid UUID format: ${id}`);
     }
-    const target = albums[index];
-    const updatedAlbum: Album = {
-      ...target,
-      status: "Draft",
-      updated: "Just now"
-    };
-    albums[index] = updatedAlbum;
-    this.saveAlbums(albums);
-    return updatedAlbum;
+    await supabase.from('albums').update({ status: 'draft' }).eq('id', id);
+    return (await this.getAlbumById(id))!;
   }
 }
 

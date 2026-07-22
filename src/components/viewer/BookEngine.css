@@ -1,5 +1,5 @@
 /* ============================================================================
-   BookEngine.css — Premium 3D Leaf-based Book Engine Styles
+   BookEngine.css — Premium 3D Book Engine Styles (using StPageFlip)
    ============================================================================ */
 
 /* ---------- Book Container ---------- */
@@ -8,21 +8,19 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  perspective: 2000px;
-  perspective-origin: 50% 50%;
   user-select: none;
   -webkit-user-select: none;
   width: 100%;
   height: 100%;
-  padding: 10px 0;
+  /* no padding — the parent Viewer wrapper handles spacing */
+  overflow: visible; /* allow page-curl shadow to render outside bounds */
 }
 
 /* ---------- Book Wrapper ---------- */
 .book-wrapper {
   position: relative;
   display: flex;
-  transform-style: preserve-3d;
-  transition: transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  overflow: visible; /* allow curl to paint outside */
 }
 
 /* ---------- Book Spine ---------- */
@@ -30,7 +28,6 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 0; /* Placed exactly at the hinge center */
   width: 16px;
   transform: translateX(-50%) translateZ(-8px);
   background: linear-gradient(
@@ -46,20 +43,14 @@
     0 0 15px rgba(0, 0, 0, 0.6);
   z-index: 10;
   border-radius: 1px;
+  pointer-events: none;
 }
 
 /* ---------- Pages Container ---------- */
 .book-pages {
   position: relative;
-  transform-style: preserve-3d;
   display: block;
-}
-
-/* ---------- Leaf Sheet (3D page wrapper) ---------- */
-.book-page-wrapper {
-  transform-style: preserve-3d;
-  will-change: transform;
-  transform-origin: left center;
+  overflow: visible; /* critical — must not clip the curl animation */
 }
 
 /* ---------- Page Face (Front or Back) ---------- */
@@ -67,8 +58,6 @@
   position: absolute;
   inset: 0;
   background-color: #0c111a;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
   box-shadow: inset 0 0 35px rgba(0, 0, 0, 0.45);
 }
 
@@ -82,19 +71,7 @@
 }
 
 /* Page gutter shadow overlays */
-.book-page-content--front::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: 35px;
-  background: linear-gradient(to right, rgba(0, 0, 0, 0.3), transparent);
-  z-index: 4;
-  pointer-events: none;
-}
-
-.book-page-content--back::before {
+.book-page-content--left::before {
   content: "";
   position: absolute;
   top: 0;
@@ -102,6 +79,18 @@
   bottom: 0;
   width: 35px;
   background: linear-gradient(to left, rgba(0, 0, 0, 0.3), transparent);
+  z-index: 4;
+  pointer-events: none;
+}
+
+.book-page-content--right::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 35px;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0.3), transparent);
   z-index: 4;
   pointer-events: none;
 }
@@ -131,42 +120,6 @@
   pointer-events: none;
 }
 
-/* ---------- Corner Peel Hover Hints ---------- */
-.book-corner-hint {
-  position: absolute;
-  bottom: 0;
-  width: 35px;
-  height: 35px;
-  z-index: 5;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  pointer-events: none;
-}
-
-.book-corner-hint--right {
-  right: 0;
-  background: linear-gradient(
-    315deg,
-    rgba(56, 189, 248, 0.1) 0%,
-    transparent 70%
-  );
-  border-radius: 0 0 12px 0;
-}
-
-.book-corner-hint--left {
-  left: 0;
-  background: linear-gradient(
-    45deg,
-    rgba(56, 189, 248, 0.1) 0%,
-    transparent 70%
-  );
-  border-radius: 0 0 0 12px;
-}
-
-.book-page-wrapper:hover .book-corner-hint {
-  opacity: 1;
-}
-
 /* ---------- Book Outer Shadow ---------- */
 .book-shadow {
   position: absolute;
@@ -180,40 +133,49 @@
   z-index: -1;
 }
 
-/* ---------- Active Flipping Easing Helpers ---------- */
-.book-page-wrapper--flipping {
-  z-index: 100 !important;
+/* ---------- HTMLFlipBook Container Styling ---------- */
+.html-book {
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.5);
+  background-color: transparent;
+  overflow: visible !important; /* override any inline overflow:hidden from library */
 }
 
-.book-page-wrapper--flipping-back {
-  z-index: 100 !important;
-}
-
-/* Dynamic Flip Shadow layer */
-.book-page-shadow {
+/* ---------- Click Zone Overlays ---------- */
+/* Transparent half-page hit areas for click-to-flip */
+.book-click-zone {
   position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-color: rgba(0, 0, 0, 0.45);
-  opacity: 0;
-  z-index: 6;
-  mix-blend-mode: multiply;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  z-index: 20;
+  cursor: default;
+  background: transparent;
+  /* During drag, react-pageflip captures pointer events — this is fine */
+}
+
+.book-click-zone--left {
+  left: 0;
+  cursor: default;
+}
+
+.book-click-zone--right {
+  right: 0;
+  cursor: default;
 }
 
 /* ---------- Responsive Layout Adjustments ---------- */
 @media (max-width: 768px) {
-  .book-engine {
-    perspective: 1400px;
-  }
-  
   .book-spine {
     display: none;
   }
 
-  .book-page-content--front::before,
-  .book-page-content--back::before {
+  .book-page-content--left::before,
+  .book-page-content--right::before {
+    display: none;
+  }
+
+  .book-click-zone {
+    /* On mobile, touch events are handled by react-pageflip natively */
     display: none;
   }
 }

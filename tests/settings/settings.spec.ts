@@ -16,9 +16,6 @@ test.describe('Settings Page E2E Suite', () => {
     await expect(settings.saveBtn).toBeVisible();
     await expect(settings.resetBtn).toBeVisible();
 
-    // Verify storage metrics card
-    await expect(page.locator('text=Storage Information')).toBeVisible();
-    await expect(page.locator('text=Staged Space Occupied')).toBeVisible();
   });
 
   test('should validate saving settings updates', async ({ page }) => {

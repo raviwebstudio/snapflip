@@ -3,11 +3,22 @@ import { HardDrive, Share2, RefreshCw, Plus } from "lucide-react";
 import { DbService } from "../../services/dbService";
 
 export default function StorageActivity() {
-  const [albums, setAlbums] = useState(() => DbService.getAlbums());
+  const [albums, setAlbums] = useState<any[]>([]);
+
+  const loadStorage = async () => {
+    try {
+      const list = await DbService.getAlbums();
+      setAlbums(list);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   useEffect(() => {
+    loadStorage();
+
     const handleStorageChange = () => {
-      setAlbums(DbService.getAlbums());
+      loadStorage();
     };
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);

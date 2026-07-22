@@ -37,3 +37,15 @@ Guarantees photo integrity without forced rotations, stretching, or cropping:
    ```bash
    npm run build
    ```
+
+## Documentation
+- [Documentation Index](./docs/README.md)
+- [Backend Architecture](./docs/architecture/BACKEND_ARCHITECTURE.md)
+- [Database Schema](./docs/architecture/DATABASE_SCHEMA.md)
+- [Folder Structure](./docs/architecture/FOLDER_STRUCTURE.md)
+- [API Contract](./docs/architecture/API_CONTRACT.md)
+- [Implementation Report](./docs/reports/IMPLEMENTATION_REPORT.md)
+- [Backend Verification Report](./docs/reports/BACKEND_VERIFICATION_REPORT.md)
+- [Project Roadmap](./docs/roadmap/PROJECT_ROADMAP.md)
+- [Changelog](./docs/roadmap/CHANGELOG.md)
+- [Project Rules](./docs/setup/PROJECT_RULES.md)

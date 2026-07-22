@@ -158,3 +158,173 @@ export async function generateImageVariants(
 
   return { optimizedUrl, thumbnailUrl };
 }
+
+export interface OptimizedVersion {
+  blob: Blob | File;
+  width: number;
+  height: number;
+  fileName: string;
+}
+
+export interface ImageOptimizationResult {
+  checksum: string;
+  original: OptimizedVersion;
+  optimized: OptimizedVersion;
+  thumbnail: OptimizedVersion;
+  metadata: {
+    width: number;
+    height: number;
+    originalSize: number;
+    optimizedSize: number;
+    thumbnailSize: number;
+    mimeType: string;
+  };
+}
+
+export async function calculateChecksum(file: File | Blob): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", arrayBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export function validateUploadFile(file: File) {
+  const allowedExtensions = ["jpg", "jpeg", "png", "webp"];
+  const ext = file.name.split(".").pop()?.toLowerCase() || "";
+  if (!allowedExtensions.includes(ext)) {
+    throw new Error(`File "${file.name}" has an invalid extension. Only jpg, jpeg, png, and webp are allowed.`);
+  }
+
+  const allowedMimeTypes = ["image/jpeg", "image/png", "image/webp"];
+  if (!allowedMimeTypes.includes(file.type)) {
+    throw new Error(`File "${file.name}" has an invalid file type. Only JPEG, PNG, and WebP images are allowed.`);
+  }
+
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error(`File "${file.name}" exceeds the maximum allowed limit of 10MB.`);
+  }
+}
+
+function compressImageToWebp(
+  file: File,
+  maxDim: number,
+  quality: number
+): Promise<{ blob: Blob; width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const canvas = document.createElement("canvas");
+      let width = img.naturalWidth;
+      let height = img.naturalHeight;
+
+      if (width > maxDim || height > maxDim) {
+        if (width > height) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        } else {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              resolve({ blob, width, height });
+            } else {
+              reject(new Error("Canvas compression failed to return Blob."));
+            }
+          },
+          "image/webp",
+          quality
+        );
+      } else {
+        reject(new Error("Failed to get 2D context for image compression."));
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Failed to load image for compression."));
+    };
+    img.src = objectUrl;
+  });
+}
+
+// Get dimensions of an image file
+function getImageDimensions(file: File): Promise<{ width: number; height: number }> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve({ width: 0, height: 0 });
+    };
+    img.src = objectUrl;
+  });
+}
+
+export async function optimizeImagePipeline(file: File): Promise<ImageOptimizationResult> {
+  // Validate file
+  validateUploadFile(file);
+
+  // Calculate checksum
+  const checksum = await calculateChecksum(file);
+
+  // Get original dimensions
+  const origDims = await getImageDimensions(file);
+
+  // 1. Original version: keep original quality if <=10MB (which it is)
+  const originalVersion: OptimizedVersion = {
+    blob: file,
+    width: origDims.width,
+    height: origDims.height,
+    fileName: file.name,
+  };
+
+  // 2. Optimized version: WebP, max width/height 2500px, quality 80-85% (choose 82%)
+  const optResult = await compressImageToWebp(file, 2500, 0.82);
+  const baseName = file.name.replace(/\.[^/.]+$/, "");
+  
+  const optimizedVersion: OptimizedVersion = {
+    blob: optResult.blob,
+    width: optResult.width,
+    height: optResult.height,
+    fileName: `${baseName}_optimized.webp`,
+  };
+
+  // 3. Thumbnail version: WebP, max width/height 400px, quality 70%
+  const thumbResult = await compressImageToWebp(file, 400, 0.70);
+  const thumbnailVersion: OptimizedVersion = {
+    blob: thumbResult.blob,
+    width: thumbResult.width,
+    height: thumbResult.height,
+    fileName: `${baseName}_thumbnail.webp`,
+  };
+
+  return {
+    checksum,
+    original: originalVersion,
+    optimized: optimizedVersion,
+    thumbnail: thumbnailVersion,
+    metadata: {
+      width: origDims.width,
+      height: origDims.height,
+      originalSize: file.size,
+      optimizedSize: optResult.blob.size,
+      thumbnailSize: thumbResult.blob.size,
+      mimeType: file.type,
+    },
+  };
+}

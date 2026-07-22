@@ -17,7 +17,7 @@ export class LandingPage {
     this.logo = page.locator('span:has-text("SnapFlip")').first();
     this.heroSection = page.locator('section:has-text("Transform your high-resolution photography portfolios")').first();
     this.ctaButton = page.locator('a:has-text("Get Started")').first();
-    this.trustedSection = page.locator('p:has-text("Trusted by top photographers")').first();
+    this.trustedSection = page.locator('p:has-text("Trusted by elite photographers")').first();
     this.featuresSection = page.locator('section:has-text("Designed for premium visual storytelling")').first();
     this.processSection = page.locator('section:has-text("Seamlessly build and publish")').first();
     this.pricingSection = page.locator('section:has-text("Choose your membership tier")').first();
@@ -30,7 +30,14 @@ export class LandingPage {
   }
 
   async clickNavbarLink(name: string) {
-    await this.page.locator(`nav a:has-text("${name}")`).first().click();
+    let link = this.page.locator(`nav a:has-text("${name}"):visible`).first();
+    if (!(await link.isVisible())) {
+      const hamburger = this.page.locator('nav button:has(svg)').first();
+      await hamburger.click({ force: true });
+      await this.page.waitForTimeout(300);
+      link = this.page.locator(`nav a:has-text("${name}"):visible`).first();
+    }
+    await link.click();
   }
 }
 
@@ -52,7 +59,7 @@ export class DashboardPage {
     this.sidebar = page.locator('aside').first();
     this.searchInput = page.locator('input[placeholder*="Search"]').first();
     this.notificationsBtn = page.locator('button[title*="Notification"], button:has(.bell)').first();
-    this.createAlbumBtn = page.locator('a[href="/create"], button:has-text("Create Album")').first();
+    this.createAlbumBtn = page.locator('main a[href="/create"]:visible, div.hidden.md\\:block a[href="/create"]:visible, button:has-text("Create Album"):visible').first();
     this.albumsTab = page.locator('button:has-text("Albums"), a[href*="tab=albums"]').first();
     this.settingsTab = page.locator('a[href="/settings"]').first();
     this.pricingTab = page.locator('a[href="/pricing"]').first();
@@ -61,18 +68,24 @@ export class DashboardPage {
     this.sortSelect = page.locator('select').first();
   }
 
-  async navigate() {
-    await this.page.goto('/dashboard');
+  async navigate(tab?: string) {
+    const url = tab ? `/dashboard?tab=${tab}` : '/dashboard';
+    await this.page.goto(url);
+    if (tab === 'albums') {
+      await this.page.locator('h4:has-text("Create New Album"), h4:has-text("No Collections Found")').first().waitFor({ state: 'visible', timeout: 15000 });
+    } else {
+      await this.page.waitForSelector('text=Overview', { state: 'attached' });
+    }
   }
 
   async openCardMenu(albumName: string) {
     // Find the album card with this title and click the three dot button
-    const card = this.page.locator(`div:has(h3:has-text("${albumName}"))`).last();
-    await card.locator('button:has(.more-vertical), button:has-text("•••"), button:has-svg').first().click();
+    const card = this.page.locator(`div.group:has(h3:has-text("${albumName}")), div.group:has(h4:has-text("${albumName}"))`).first();
+    await card.locator('button[title="Actions menu"], button:has(.lucide-more-vertical), button:has-text("•••")').first().click();
   }
 
   async clickCardMenuItem(itemText: string) {
-    await this.page.locator(`button:has-text("${itemText}"), div:has-text("${itemText}")`).first().click();
+    await this.page.locator(`.dropdown-menu button:has-text("${itemText}"), .dropdown-menu div:has-text("${itemText}")`).first().click();
   }
 }
 
