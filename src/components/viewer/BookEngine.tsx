@@ -304,7 +304,7 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>((
     }
 
     // Use nearly the whole viewport in fullscreen while leaving safe page-curl breathing room.
-    const scaleFactor = isFullscreen ? 0.96 : 0.98;
+    const scaleFactor = isFullscreen ? 1.0 : 0.98;
     const maxBookW = Math.max(availableW * scaleFactor, 200);
     const maxBookH = Math.max(availableH * scaleFactor, 150);
 
@@ -715,6 +715,10 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>((
     );
   }
 
+  const resolvedAspectRatio = isSinglePage
+    ? `${dimensions.width} / ${dimensions.height}`
+    : `${dimensions.width * 2 + 16} / ${dimensions.height}`;
+
   return (
     <div
       ref={localContainerRef}
@@ -727,7 +731,11 @@ const BookEngine = forwardRef<BookEngineRef, BookEngineProps>((
         justifyContent: "center",
         alignItems: "center",
         width: "100%",
-        height: "100%",
+        height: isFullscreen ? "100vh" : "100%",
+        maxHeight: isFullscreen ? "100vh" : "100%",
+        maxWidth: isFullscreen ? "100%" : "100%",
+        aspectRatio: isFullscreen ? resolvedAspectRatio : undefined,
+        objectFit: "contain",
         userSelect: "none",
         WebkitUserSelect: "none",
         touchAction: "none",

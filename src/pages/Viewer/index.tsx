@@ -21,11 +21,12 @@ import {
   ExternalLink
 } from "lucide-react";
 import QRCode from "qrcode";
+import html2canvas from "html2canvas";
 import { DbService } from "../../services/dbService";
 import type { Album } from "../../services/dbService";
 import { AnalyticsService } from "../../services/AnalyticsService";
 import { useToastStore } from "../../store";
-import { detectRecommendedSize } from "../../utils/albumUtils";
+import { detectRecommendedSize, getAlbumPageDimensions } from "../../utils/albumUtils";
 import BookEngine, { type BookEngineRef } from "../../components/viewer/BookEngine";
 import ToastContainer from "../../components/dashboard/ToastContainer";
 
@@ -87,60 +88,7 @@ class ViewerErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBound
 
 // ─── Main Viewer ────────────────────────────────────────────────────────────
 
-function drawRoundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.lineTo(x + width - radius, y);
-  ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-  ctx.lineTo(x + width, y + height - radius);
-  ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-  ctx.lineTo(x + radius, y + height);
-  ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-  ctx.lineTo(x, y + radius);
-  ctx.quadraticCurveTo(x, y, x + radius, y);
-  ctx.closePath();
-}
 
-function wrapCanvasText(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  x: number,
-  y: number,
-  maxWidth: number,
-  lineHeight: number,
-  font: string
-) {
-  ctx.font = font;
-  const words = text.split(/\s+/);
-  const lines: string[] = [];
-  let currentLine = "";
-
-  words.forEach((word) => {
-    const testLine = currentLine ? `${currentLine} ${word}` : word;
-    if (ctx.measureText(testLine).width <= maxWidth || !currentLine) {
-      currentLine = testLine;
-    } else {
-      lines.push(currentLine);
-      currentLine = word;
-    }
-  });
-
-  if (currentLine) lines.push(currentLine);
-  const visibleLines = lines.slice(0, 2);
-  const startY = y - ((visibleLines.length - 1) * lineHeight) / 2;
-  visibleLines.forEach((line, index) => {
-    ctx.fillText(line, x, startY + index * lineHeight);
-  });
-}
-
-function loadCanvasImage(src: string) {
-  return new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = reject;
-    image.src = src;
-  });
-}
 
 function Viewer() {
   const { slug } = useParams<{ slug: string }>();
@@ -176,6 +124,8 @@ function Viewer() {
 
   const [zoomScale, setZoomScale] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const fadeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [bookSize, setBookSize] = useState({ width: 800, height: 600 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
@@ -246,6 +196,10 @@ function Viewer() {
         (document as any).msFullscreenElement
       );
       setIsFullscreen(isFs);
+      if (isFs) {
+        setShowShare(false);
+        setShowInfo(false);
+      }
     };
     
     document.addEventListener("fullscreenchange", handleFullscreenChange);
@@ -261,18 +215,50 @@ function Viewer() {
     };
   }, []);
 
+  const resetControlsTimeout = useCallback(() => {
+    setShowControls(true);
+    if (fadeTimeoutRef.current) {
+      clearTimeout(fadeTimeoutRef.current);
+    }
+    fadeTimeoutRef.current = setTimeout(() => {
+      setShowControls(false);
+    }, 3000);
+  }, []);
+
+  // Fullscreen controls auto-hide & interaction listener
+  useEffect(() => {
+    if (!isFullscreen) {
+      setShowControls(true);
+      return;
+    }
+
+    resetControlsTimeout();
+
+    const handleInteraction = () => {
+      resetControlsTimeout();
+    };
+
+    window.addEventListener("mousemove", handleInteraction);
+    window.addEventListener("touchmove", handleInteraction);
+    window.addEventListener("touchstart", handleInteraction);
+    window.addEventListener("click", handleInteraction);
+
+    return () => {
+      window.removeEventListener("mousemove", handleInteraction);
+      window.removeEventListener("touchmove", handleInteraction);
+      window.removeEventListener("touchstart", handleInteraction);
+      window.removeEventListener("click", handleInteraction);
+      if (fadeTimeoutRef.current) {
+        clearTimeout(fadeTimeoutRef.current);
+      }
+    };
+  }, [isFullscreen, resetControlsTimeout]);
+
   const toggleFullscreen = () => {
     const docEl = document.documentElement as any;
     const doc = document as any;
     
-    const isFs = !!(
-      document.fullscreenElement ||
-      doc.webkitFullscreenElement ||
-      doc.mozFullScreenElement ||
-      doc.msFullscreenElement
-    );
-
-    if (!isFs) {
+    if (!isFullscreen) {
       const requestFS =
         docEl.requestFullscreen ||
         docEl.webkitRequestFullscreen ||
@@ -285,11 +271,13 @@ function Viewer() {
             setIsFullscreen(true);
           }).catch((err: any) => {
             console.error("Error attempting to enable fullscreen mode:", err);
+            setIsFullscreen(true);
           });
         } else {
-          // Fallback if requestFullscreen returns void (older Safari/WebKit versions)
           setIsFullscreen(true);
         }
+      } else {
+        setIsFullscreen(true);
       }
     } else {
       const exitFS =
@@ -302,11 +290,14 @@ function Viewer() {
         if (promise && typeof promise.then === "function") {
           promise.then(() => {
             setIsFullscreen(false);
+          }).catch(() => {
+            setIsFullscreen(false);
           });
         } else {
-          // Fallback if exitFullscreen returns void
           setIsFullscreen(false);
         }
+      } else {
+        setIsFullscreen(false);
       }
     }
   };
@@ -669,82 +660,114 @@ function Viewer() {
     if (!viewerQrCode || !album) return;
 
     try {
-      const canvas = document.createElement("canvas");
-      const scale = 3;
-      const width = 1080;
-      const height = 1440;
-      canvas.width = width * scale;
-      canvas.height = height * scale;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) {
-        addToast("Could not prepare QR card.", "error");
-        return;
-      }
+      // 1. Create a styled off-screen element for the card
+      const cardContainer = document.createElement("div");
+      cardContainer.style.position = "fixed";
+      cardContainer.style.left = "-9999px";
+      cardContainer.style.top = "-9999px";
+      cardContainer.style.width = "800px";
+      cardContainer.style.height = "600px";
+      cardContainer.style.background = "linear-gradient(135deg, #020617 0%, #0f172a 40%, #0d3b4c 100%)";
+      cardContainer.style.display = "flex";
+      cardContainer.style.flexDirection = "column";
+      cardContainer.style.justifyContent = "space-between";
+      cardContainer.style.alignItems = "center";
+      cardContainer.style.padding = "50px 40px";
+      cardContainer.style.boxSizing = "border-box";
+      cardContainer.style.color = "#ffffff";
+      cardContainer.style.fontFamily = "'Playfair Display', 'Inter', sans-serif";
+      cardContainer.style.zIndex = "-9999";
 
-      ctx.scale(scale, scale);
-      const qrImage = await loadCanvasImage(viewerQrCode);
-      const studioName = getStudioName();
+      // 2. Top: Album title in large white text (Playfair Display)
+      const titleEl = document.createElement("div");
+      titleEl.style.fontFamily = "'Playfair Display', serif";
+      titleEl.style.fontSize = "36px";
+      titleEl.style.fontWeight = "700";
+      titleEl.style.textAlign = "center";
+      titleEl.style.maxWidth = "720px";
+      titleEl.style.color = "#ffffff";
+      titleEl.style.lineHeight = "1.3";
+      titleEl.style.wordBreak = "break-word";
+      titleEl.style.display = "-webkit-box";
+      titleEl.style.webkitLineClamp = "2";
+      titleEl.style.webkitBoxOrient = "vertical";
+      titleEl.style.overflow = "hidden";
+      titleEl.innerText = album.name;
+      cardContainer.appendChild(titleEl);
 
-      const gradient = ctx.createLinearGradient(0, 0, width, height);
-      gradient.addColorStop(0, "#020617");
-      gradient.addColorStop(0.58, "#0f172a");
-      gradient.addColorStop(1, "#082f49");
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, width, height);
+      // 3. Middle: QR code centered (300x300px)
+      const qrWrapper = document.createElement("div");
+      qrWrapper.style.width = "300px";
+      qrWrapper.style.height = "300px";
+      qrWrapper.style.background = "#ffffff";
+      qrWrapper.style.padding = "15px";
+      qrWrapper.style.borderRadius = "16px";
+      qrWrapper.style.boxShadow = "0 20px 40px rgba(0, 0, 0, 0.4)";
+      qrWrapper.style.display = "flex";
+      qrWrapper.style.alignItems = "center";
+      qrWrapper.style.justifyContent = "center";
+      qrWrapper.style.boxSizing = "border-box";
 
-      ctx.fillStyle = "rgba(14, 165, 233, 0.16)";
-      ctx.beginPath();
-      ctx.arc(910, 118, 255, 0, Math.PI * 2);
-      ctx.fill();
+      const qrImg = new Image();
+      qrImg.src = viewerQrCode;
+      qrImg.style.width = "270px";
+      qrImg.style.height = "270px";
+      qrWrapper.appendChild(qrImg);
+      cardContainer.appendChild(qrWrapper);
 
-      ctx.fillStyle = "rgba(255, 255, 255, 0.055)";
-      drawRoundedRect(ctx, 70, 70, 940, 1300, 42);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.12)";
-      ctx.lineWidth = 2;
-      ctx.stroke();
+      // 4. Bottom: Photographer name + "Scan to view album" text
+      const bottomEl = document.createElement("div");
+      bottomEl.style.textAlign = "center";
+      bottomEl.style.display = "flex";
+      bottomEl.style.flexDirection = "column";
+      bottomEl.style.gap = "6px";
 
-      ctx.fillStyle = "#0ea5e9";
-      drawRoundedRect(ctx, 120, 120, 84, 84, 24);
-      ctx.fill();
-      ctx.strokeStyle = "#e0f2fe";
-      ctx.lineWidth = 8;
-      ctx.strokeRect(142, 151, 40, 30);
-      ctx.beginPath();
-      ctx.arc(162, 166, 9, 0, Math.PI * 2);
-      ctx.stroke();
+      const photographerEl = document.createElement("div");
+      photographerEl.style.fontSize = "16px";
+      photographerEl.style.fontWeight = "600";
+      photographerEl.style.color = "#94a3b8";
+      photographerEl.style.textTransform = "uppercase";
+      photographerEl.style.letterSpacing = "0.15em";
+      photographerEl.style.fontFamily = "'Inter', sans-serif";
+      photographerEl.innerText = getStudioName();
+      bottomEl.appendChild(photographerEl);
 
-      ctx.fillStyle = "#f8fafc";
-      ctx.font = "800 42px Arial, sans-serif";
-      ctx.textAlign = "left";
-      ctx.fillText("SnapFlip", 226, 174);
-      ctx.fillStyle = "#7dd3fc";
-      ctx.font = "700 19px Arial, sans-serif";
-      ctx.fillText("PREMIUM ALBUM SHOWCASE", 226, 204);
+      const scanTextEl = document.createElement("div");
+      scanTextEl.style.fontSize = "20px";
+      scanTextEl.style.fontWeight = "600";
+      scanTextEl.style.color = "#38bdf8"; // nice light teal/blue text
+      scanTextEl.style.letterSpacing = "0.05em";
+      scanTextEl.style.fontFamily = "'Inter', sans-serif";
+      scanTextEl.innerText = "Scan to view album";
+      bottomEl.appendChild(scanTextEl);
 
-      ctx.textAlign = "center";
-      ctx.fillStyle = "#f8fafc";
-      wrapCanvasText(ctx, album.name, width / 2, 345, 760, 58, "800 56px Arial, sans-serif");
-      ctx.fillStyle = "#bae6fd";
-      ctx.font = "700 28px Arial, sans-serif";
-      ctx.fillText(studioName, width / 2, 445);
+      cardContainer.appendChild(bottomEl);
 
-      ctx.fillStyle = "#ffffff";
-      drawRoundedRect(ctx, 235, 520, 610, 610, 36);
-      ctx.fill();
-      ctx.drawImage(qrImage, 275, 560, 530, 530);
+      // Append temporary element to DOM
+      document.body.appendChild(cardContainer);
 
-      ctx.fillStyle = "#f8fafc";
-      ctx.font = "800 44px Arial, sans-serif";
-      ctx.fillText("Scan to View Album", width / 2, 1230);
+      // Wait for image loading to be ready
+      await new Promise((resolve) => {
+        if (qrImg.complete) resolve(true);
+        else qrImg.onload = () => resolve(true);
+      });
 
-      ctx.fillStyle = "#94a3b8";
-      ctx.font = "700 24px Arial, sans-serif";
-      ctx.fillText("Powered by SnapFlip", width / 2, 1290);
+      // Capture PNG with html2canvas
+      const canvas = await html2canvas(cardContainer, {
+        width: 800,
+        height: 600,
+        backgroundColor: null,
+        scale: 2, // High resolution rendering
+        useCORS: true,
+        logging: false
+      });
+
+      // Clean up
+      document.body.removeChild(cardContainer);
 
       const link = document.createElement("a");
       link.href = canvas.toDataURL("image/png");
-      link.download = `snapflip-qr-card-${album.slug || album.id}.png`;
+      link.download = `SnapFlip_${album.name}.png`;
       link.click();
       addToast("QR Card download started!", "success");
     } catch (err) {
@@ -780,6 +803,19 @@ function Viewer() {
       resolvedDetectedSize = "Landscape";
     }
   }
+
+  const albumDimensions = album
+    ? getAlbumPageDimensions(
+        album.settings?.albumSize,
+        album.settings?.customWidth,
+        album.settings?.customHeight,
+        album.settings?.detectedSize ?? resolvedDetectedSize
+      )
+    : { width: 297, height: 210, aspectRatio: "297 / 210" };
+
+  const bookAspectRatio = orientation === "portrait"
+    ? `${albumDimensions.width} / ${albumDimensions.height}`
+    : `${albumDimensions.width * 2 + 16} / ${albumDimensions.height}`;
 
   const handlePageChange = useCallback((pageIndex: number) => {
     setCurrentPage(pageIndex);
@@ -1210,18 +1246,26 @@ function Viewer() {
             style={{
               maxHeight: isFullscreen ? "100vh" : "calc(100vh - 272px)",
               width: "100%",
-              height: "100%",
+              height: isFullscreen ? "100vh" : "100%",
               cursor: zoomScale > 1 ? (isPanning ? "grabbing" : "grab") : "default",
+              background: isFullscreen ? "#000" : undefined,
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
             }}
           >
             <div
               style={{
-                width: zoomScale > 1 ? `${bookSize.width * zoomScale}px` : "100%",
-                height: zoomScale > 1 ? `${bookSize.height * zoomScale}px` : "100%",
+                width: isFullscreen ? "100%" : (zoomScale > 1 ? `${bookSize.width * zoomScale}px` : "100%"),
+                height: isFullscreen ? "100vh" : (zoomScale > 1 ? `${bookSize.height * zoomScale}px` : "100%"),
+                maxHeight: isFullscreen ? "100vh" : undefined,
+                maxWidth: isFullscreen ? "100%" : undefined,
                 display: "flex",
                 justifyContent: "center",
                 alignItems: "center",
                 transition: "width 0.2s ease, height 0.2s ease",
+                objectFit: "contain",
+                aspectRatio: isFullscreen ? bookAspectRatio : undefined,
               }}
             >
               <div
@@ -1470,35 +1514,124 @@ function Viewer() {
         </footer>
       )}
 
-      {/* Floating Exit Fullscreen button */}
+      {/* Floating Exit Fullscreen and bottom navigation controls */}
       {isFullscreen && (
-        <button
-          onClick={toggleFullscreen}
+        <div
           style={{
-            position: "absolute",
-            top: 24,
-            right: 24,
-            zIndex: 50,
-            background: "rgba(15,23,42,0.85)",
-            border: "1px solid #1e293b",
-            borderRadius: 12,
-            padding: "10px 20px",
-            color: "#f1f5f9",
-            fontSize: 11,
-            fontWeight: "bold",
-            textTransform: "uppercase",
-            letterSpacing: "0.1em",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
-            transition: "all 0.2s ease",
+            position: "fixed",
+            inset: 0,
+            zIndex: 100,
+            pointerEvents: "none",
           }}
         >
-          <Minimize className="h-4 w-4 text-sky-400" />
-          Exit Fullscreen
-        </button>
+          <button
+            onClick={toggleFullscreen}
+            style={{
+              position: "absolute",
+              top: 24,
+              right: 24,
+              zIndex: 50,
+              background: "rgba(15, 23, 42, 0.75)",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              borderRadius: 12,
+              padding: "10px 20px",
+              color: "#ffffff",
+              fontSize: 11,
+              fontWeight: "bold",
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+              opacity: showControls ? 0.7 : 0,
+              pointerEvents: showControls ? "auto" : "none",
+              transition: "opacity 0.3s ease, transform 0.3s ease",
+            }}
+          >
+            <Minimize className="h-4 w-4 text-white" />
+            Exit Fullscreen
+          </button>
+
+          <div
+            style={{
+              position: "absolute",
+              bottom: 24,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 50,
+              background: "rgba(15, 23, 42, 0.8)",
+              backdropFilter: "blur(8px)",
+              border: "1px solid rgba(255, 255, 255, 0.1)",
+              borderRadius: 30,
+              padding: "8px 24px",
+              display: "flex",
+              alignItems: "center",
+              gap: 16,
+              boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+              opacity: showControls ? 0.7 : 0,
+              pointerEvents: showControls ? "auto" : "none",
+              transition: "opacity 0.3s ease, transform 0.3s ease",
+            }}
+          >
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                bookEngineRef.current?.flipPrev();
+              }}
+              disabled={currentPage === 0}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#ffffff",
+                cursor: currentPage === 0 ? "not-allowed" : "pointer",
+                opacity: currentPage === 0 ? 0.3 : 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                pointerEvents: showControls ? "auto" : "none",
+              }}
+              title="Previous Page"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+
+            <span style={{ fontSize: 12, fontWeight: "600", fontFamily: "monospace", color: "#ffffff", whiteSpace: "nowrap" }}>
+              {currentPage === 0 ? (
+                "Cover Page"
+              ) : currentPage >= totalPages - 1 ? (
+                "Back Cover"
+              ) : orientation === "landscape" ? (
+                `Spread ${Math.floor((currentPage - 1) / 2) + 1} of ${Math.floor((totalPages - 2) / 2) + 1}`
+              ) : (
+                `Page ${currentPage} of ${totalPhotos}`
+              )}
+            </span>
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                bookEngineRef.current?.flipNext();
+              }}
+              disabled={currentPage >= totalPages - 1}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#ffffff",
+                cursor: currentPage >= totalPages - 1 ? "not-allowed" : "pointer",
+                opacity: currentPage >= totalPages - 1 ? 0.3 : 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                pointerEvents: showControls ? "auto" : "none",
+              }}
+              title="Next Page"
+            >
+              <ArrowRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
       )}
 
       <ToastContainer />
